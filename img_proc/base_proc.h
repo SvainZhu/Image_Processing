@@ -17,10 +17,4 @@ void double_threshold(Mat &src, double low_threshold, double high_threshold);
 
 void double_threshold_link(Mat &src, double low_threshold, double high_threshold);
 
-int OSTU(QVector<int> hist);
-
-void elbp(Mat& src, Mat &dst, int radius, int neighbors);
-
-void elbp1(Mat& src, Mat &dst);
-
 #endif //IMAGE_PROCESSING_BASE_PROC_H

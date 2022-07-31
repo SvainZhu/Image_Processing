@@ -32,6 +32,7 @@
 #include <vector>
 #include <fstream>
 
+#include "./img_proc//base_proc.cpp"
 using namespace cv;
 using namespace std;
 
@@ -48,9 +49,33 @@ public:
 private slots:
     void on_pushButton_clicked();
 
-    void on_checkBox_clicked();
-
     void on_select_images_clicked();
+
+    void on_gray_hist_clicked();
+
+    void on_gray_balance_clicked();
+
+    void on_gray_sharpen_clicked();
+
+    void on_laplacian_sharpen_clicked();
+
+    void on_add_salt_noise_clicked();
+
+    void on_add_guassian_noise_clicked();
+
+    void on_roberts_edge_detection_clicked();
+
+    void on_sobel_edge_detection_clicked();
+
+    void on_prewitt_edge_detection_clicked();
+
+    void on_laplacian_edge_detection_clicked();
+
+    void on_krisch_edge_detection_clicked();
+
+    void on_canny_edge_detection_clicked();
+
+
 
 };
 
