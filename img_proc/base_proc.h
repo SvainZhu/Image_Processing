@@ -5,9 +5,9 @@
 #ifndef IMAGE_PROCESSING_BASE_PROC_H
 #define IMAGE_PROCESSING_BASE_PROC_H
 
-Mat gray_hist(Mat gray_image);
+Mat gray_to_hist(Mat gray_image);
 
-QVector<int> gray_vector(Mat gray);
+QVector<int> gray_to_vector(Mat gray);
 
 Mat add_salt_noise(const src, int intensity);
 

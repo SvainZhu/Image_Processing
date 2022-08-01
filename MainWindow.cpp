@@ -40,19 +40,144 @@ void on_select_images_clicked(){
 
     for (int i = 0; i < rows; i++){
         for (int j = 0; j < cols; j++){
-            grayImg.at<uchar>(i, j) = (int)0.11 *
+            grayImg.at<uchar>(i, j) = (int) 0.11 * srcImg.at<Vec3b>(i, j)[0]
+                                        + 0.59 * srcImg.at<Vec3b>(i, j)[1]
+                                        + 0.3 * srcImg.at<Vec3b>(i, j)[2];
         }
     }
 
+    QTemp = QImage((const uchar*)(grayImg.data), grayImg.cols, grayImg.rows, grayImg.cols * grayImg.channels(), QImage::Format_Indexed8);
+    Ui->label_1->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_1->setScaledContents(true);
+    Ui->label_1->resize(QTemp.size);
+    Ui->label_1->show();
+
 }
 
-void on_gray_hist_clicked();
+void MainWindow::on_gray_hist_clicked(){
+    QImage QTemp;
+    QTemp = QImage((const uchar*)(grayImg.data), grayImg.cols, grayImg.rows, grayImg.cols * grayImg.channels(), QImage::Format_Indexed8);
+    Ui->label_1->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_2->setScaledContents(true);
+    Ui->label_2->resize(QTemp.size);
+    Ui->label_2->show();
 
-void on_gray_balance_clicked();
+    Mat gray_hist;
+    gray_hist = gray_to_hist(grayImg);
+    imshow("gray histogram", gray_hist);
+    waitKey(0);
+    cv::destoryWindow("gray histogram");
+    waitKey(1);
+}
 
-void on_gray_sharpen_clicked();
+void MainWindow::on_gray_balance_clicked(){
+    Mat balance, gray_img;
+    gray_img.create(srcImg.rows, srcImg.cols, CV_8UC1);
+    balance.create(srcImg.rows, scrImg.cols, CV_8UC1);
 
-void on_laplacian_sharpen_clicked();
+    QImage QTemp;
+    QVector<int> pixel(256, 0);
+    QVector<float> pixel_gray(256.,0.);
+    float sum = 0;
+
+    for (int i = 0; i < grayImg.rows; i++){
+        for (int j = 0; j < grayImg.cols; j++){
+            pixel[grayImg.at<uchar>(i, j)]++;
+        }
+    }
+
+    for (int i = 0; i < pixel.size(), i++){
+        sum += pixel[i]
+    }
+
+    for (int i = 0; i < 256; i++){
+        float num = 0.;
+        for (int j = 0; j <= i; j++){
+            num += pixel[j];
+        }
+        pixel_gray[i] = 255 * num / sum;
+    }
+
+    for (int i = 0; i < srcImg.rows; i++){
+        for (int j = 0; j < srcImg.cols; j++){
+            balance.at<uchar>(i, j) = pixel_gray[grayImg.at<uchar>(i, j)];
+        }
+    }
+
+    gray_img = balance;
+
+    QTemp = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    Ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_3->setScaledContents(true);
+    Ui->label_3->resize(QTemp.size);
+    Ui->label_3->show();
+
+}
+
+void MainWindow::on_gray_sharpen_clicked(){
+    Mat grad, gray_img;
+    QImage QTemp1, QTemp2;
+    grad.create(srcImg.rows, srcImg.cols, CV_8UC1);
+    gray_img.create(srcImg.rows, srcImg.cols, CV_8UC1);
+    for (int i = 0; i < gray_img.rows - 1; i++){
+        for (int j = 0; j < gray_img.cols - 1; j++){
+            grad.at<uchar>(i, j) = saturate_cast<uchar>(max(fabs(grayImg.at<uchar>(i+1, j) - grayImg<uchar>(i, j)),
+                                                            fabs(grayImg.at<uchar>(i, j+1) - grayImg<uchar>(i, j))));
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i, j) - grad<uchar>(i, j))
+        }
+    }
+
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    Ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_3->setScaledContents(true);
+    Ui->label_3->resize(QTemp1.size);
+    Ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_2->setScaledContents(true);
+    Ui->label_2->resize(QTemp2.size);
+    Ui->label_2->show();
+
+
+}
+
+void MainWindow::on_laplacian_sharpen_clicked(){
+    Mat grad, gray_img;
+    QImage QTemp1, QTemp2;
+    grad.create(srcImg.rows, srcImg.cols, CV_8UC1);
+    gray_img.create(srcImg.rows, srcImg.cols, CV_8UC1);
+    for (int i = 1; i < gray_img.rows - 1; i++){
+        for (int j = 1; j < gray_img.cols - 1; j++){
+            grad.at<uchar>(i, j) = saturate_cast<uchar>(-4 * grayImg.at<uchar>(i-1, j) + grayImg.at<uchar>(i, j)
+                                                        + grayImg.at<uchar>(i+1, j) + grayImg.at<uchar>(i, j-1)
+                                                        + grayImg.at<uchar>(i, j+1));
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(5 * grayImg.at<uchar>(i-1, j) + grayImg.at<uchar>(i, j)
+                                                            + grayImg.at<uchar>(i+1, j) + grayImg.at<uchar>(i, j-1)
+                                                            + grayImg.at<uchar>(i, j+1))
+        }
+    }
+
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    Ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_3->setScaledContents(true);
+    Ui->label_3->resize(QTemp1.size);
+    Ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label_2->setScaledContents(true);
+    Ui->label_2->resize(QTemp2.size);
+    Ui->label_2->show();
+
+}
 
 void on_add_salt_noise_clicked();
 

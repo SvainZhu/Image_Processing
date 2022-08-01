@@ -4,7 +4,7 @@
 
 #include "base_proc.h"
 
-Mat gray_hist(Mat grays){
+Mat gray_to_hist(Mat grays){
     QVector<int> pixels(256,0);
     int rows = grays.rows, cols = grays.cols;
 
@@ -38,7 +38,7 @@ Mat gray_hist(Mat grays){
     return gray_hist;
 }
 
-QVector<int> gray_vector(Mat grays){
+QVector<int> gray_to_vector(Mat grays){
     QVector<int> pixels(256,0);
     int rows = grays.rows, cols = grays.cols;
 
