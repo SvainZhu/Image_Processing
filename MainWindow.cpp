@@ -21,19 +21,30 @@ void MainWindow::on_pushButton_clicked(){
     cvtColor(srcImg, grayImg, CV_BRG2GRAY);
 
     Mat temp;
-    QImage Qtemp;
+    QImage QTemp;
     cvtColor(srcImg, temp, CV_BGR2RGB);
-    Qtemp = QImage((const unsigned char *)(temp.data), temp.cols, temp.rows, temp.step, QImage::Format_RGB888);
+    QTemp = QImage((const unsigned char *)(temp.data), temp.cols, temp.rows, temp.step, QImage::Format_RGB888);
 
-    Ui->label->setPixmap(QPixmap::fromImage(Qtemp));
-    Qtemp = Qtemp.scaled(250, 250, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Ui->label->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     Ui->label->setScaledContents(true);
-    Ui->label->resize(Qtemp.size);
+    Ui->label->resize(QTemp.size);
     Ui->label->show;
 
 }
 
-void on_select_images_clicked();
+void on_select_images_clicked(){
+    int rows = srcImg.rows, cols = srcImg.cols;
+    grayImg.create(rows, cols, CV_8UC1);
+    QImage QTemp;
+
+    for (int i = 0; i < rows; i++){
+        for (int j = 0; j < cols; j++){
+            grayImg.at<uchar>(i, j) = (int)0.11 *
+        }
+    }
+
+}
 
 void on_gray_hist_clicked();
 
