@@ -45,7 +45,7 @@ class MainWindow : public QMainWindow{
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    Mat srcImg, grayImg, noiseImg;
+    Mat srcImg, grayImg, saltNoiseImg, guassianNoiseImg;
 private slots:
     void on_pushButton_clicked();
 
@@ -75,7 +75,8 @@ private slots:
 
     void on_canny_edge_detection_clicked();
 
-
+private:
+    Ui::MainWindow * ui;
 
 };
 

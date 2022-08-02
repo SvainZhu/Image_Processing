@@ -25,11 +25,11 @@ void MainWindow::on_pushButton_clicked(){
     cvtColor(srcImg, temp, CV_BGR2RGB);
     QTemp = QImage((const unsigned char *)(temp.data), temp.cols, temp.rows, temp.step, QImage::Format_RGB888);
 
-    Ui->label->setPixmap(QPixmap::fromImage(QTemp));
+    ui->label->setPixmap(QPixmap::fromImage(QTemp));
     QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label->setScaledContents(true);
-    Ui->label->resize(QTemp.size);
-    Ui->label->show;
+    ui->label->setScaledContents(true);
+    ui->label->resize(QTemp.size);
+    ui->label->show;
 
 }
 
@@ -47,22 +47,22 @@ void on_select_images_clicked(){
     }
 
     QTemp = QImage((const uchar*)(grayImg.data), grayImg.cols, grayImg.rows, grayImg.cols * grayImg.channels(), QImage::Format_Indexed8);
-    Ui->label_1->setPixmap(QPixmap::fromImage(QTemp));
+    ui->label_1->setPixmap(QPixmap::fromImage(QTemp));
     QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_1->setScaledContents(true);
-    Ui->label_1->resize(QTemp.size);
-    Ui->label_1->show();
+    ui->label_1->setScaledContents(true);
+    ui->label_1->resize(QTemp.size);
+    ui->label_1->show();
 
 }
 
 void MainWindow::on_gray_hist_clicked(){
     QImage QTemp;
     QTemp = QImage((const uchar*)(grayImg.data), grayImg.cols, grayImg.rows, grayImg.cols * grayImg.channels(), QImage::Format_Indexed8);
-    Ui->label_1->setPixmap(QPixmap::fromImage(QTemp));
+    ui->label_1->setPixmap(QPixmap::fromImage(QTemp));
     QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_2->setScaledContents(true);
-    Ui->label_2->resize(QTemp.size);
-    Ui->label_2->show();
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp.size);
+    ui->label_2->show();
 
     Mat gray_hist;
     gray_hist = gray_to_hist(grayImg);
@@ -109,11 +109,11 @@ void MainWindow::on_gray_balance_clicked(){
     gray_img = balance;
 
     QTemp = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
-    Ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
     QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_3->setScaledContents(true);
-    Ui->label_3->resize(QTemp.size);
-    Ui->label_3->show();
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size);
+    ui->label_3->show();
 
 }
 
@@ -131,18 +131,18 @@ void MainWindow::on_gray_sharpen_clicked(){
     }
 
     QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
-    Ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
     QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_3->setScaledContents(true);
-    Ui->label_3->resize(QTemp1.size);
-    Ui->label_3->show();
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
 
     QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
-    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
     QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_2->setScaledContents(true);
-    Ui->label_2->resize(QTemp2.size);
-    Ui->label_2->show();
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
 
 
 }
@@ -154,42 +154,193 @@ void MainWindow::on_laplacian_sharpen_clicked(){
     gray_img.create(srcImg.rows, srcImg.cols, CV_8UC1);
     for (int i = 1; i < gray_img.rows - 1; i++){
         for (int j = 1; j < gray_img.cols - 1; j++){
-            grad.at<uchar>(i, j) = saturate_cast<uchar>(-4 * grayImg.at<uchar>(i-1, j) + grayImg.at<uchar>(i, j)
+            grad.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i-1, j) - 4 * grayImg.at<uchar>(i, j)
                                                         + grayImg.at<uchar>(i+1, j) + grayImg.at<uchar>(i, j-1)
                                                         + grayImg.at<uchar>(i, j+1));
-            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(5 * grayImg.at<uchar>(i-1, j) + grayImg.at<uchar>(i, j)
-                                                            + grayImg.at<uchar>(i+1, j) + grayImg.at<uchar>(i, j-1)
-                                                            + grayImg.at<uchar>(i, j+1))
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(- grayImg.at<uchar>(i-1, j) + 5 * grayImg.at<uchar>(i, j)
+                                                            - grayImg.at<uchar>(i+1, j) - grayImg.at<uchar>(i, j-1)
+                                                            - grayImg.at<uchar>(i, j+1))
         }
     }
 
     QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
-    Ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
     QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_3->setScaledContents(true);
-    Ui->label_3->resize(QTemp1.size);
-    Ui->label_3->show();
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
 
     QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
     Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
     QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    Ui->label_2->setScaledContents(true);
-    Ui->label_2->resize(QTemp2.size);
-    Ui->label_2->show();
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
 
 }
 
-void on_add_salt_noise_clicked();
+void MainWindow::on_add_salt_noise_clicked(){
+    Mat salt_noise, temp;
+    QImage QTemp;
+    salt_noise.create(srcImg.rows, srcImg.cols, CV_8UC3);
+    salt_noise = add_salt_noise(srcImg, 500);
+    cvtColor(salt_noise, temp, CV_BGR2RGB);
 
-void on_add_guassian_noise_clicked();
+    saltNoiseImg = temp.clone();
+    QTemp = QImage((const uchar*)(temp.data), temp.cols, temp.rows, temp.step, QImage::Format_RGB888);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp.size());
+    ui->label_2->show();
 
-void on_roberts_edge_detection_clicked();
 
-void on_sobel_edge_detection_clicked();
+}
 
-void on_prewitt_edge_detection_clicked();
+void MainWindow::on_add_guassian_noise_clicked(){
+    Mat guassian_noise, temp;
+    QImage QTemp;
+    guassian_noise.create(srcImg.rows, srcImg.cols, CV_8UC3);
+    guassian_noise = add_salt_noise(srcImg, 500);
+    cvtColor(guassian_noise, temp, CV_BGR2RGB);
 
-void on_laplacian_edge_detection_clicked();
+    guassianNoiseImg = temp.clone();
+    QTemp = QImage((const uchar*)(temp.data), temp.cols, temp.rows, temp.step, QImage::Format_RGB888);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp.size());
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_roberts_edge_detection_clicked(){
+    Mat grad, gray_img;
+    QImage QTemp1, QTemp2;
+    grad.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    gray_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    for (int i = 0; i < grayImg.rows - 1; i++){
+        for (int j = 0; j < grayImg.cols - 1, j++){
+            grad.at<uchar>(i, j) = saturate_cast<uchar>(fabs(grayImg.at<uchar>(i, j) - grayImg.at<uchar>(i+1, j+1)) +
+                                                        fabs(grayImg.at<uchar>(i+1, j))- grayImg.at<uchar>(i, j+1));
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i, j) - grad.at<uchar>(i, j));
+        }
+    }
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
+}
+
+void MainWindow::on_sobel_edge_detection_clicked(){
+    Mat grad, gray_img, fx, fy;
+    QImage QTemp1, QTemp2;
+    grad.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    gray_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    fx.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    fy.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    for (int i = 1; i < grayImg.rows - 1; i++){
+        for (int j = 1; j < grayImg.cols - 1, j++){
+            fx.at<uchar>(i, j) = saturate_cast<uchar>(fabs(grayImg.at<uchar>(i+1, j-1) + 2 * grayImg.at<uchar>(i+1, j)
+                                                    + grayImg.at<uchar>(i+1, j+1) - grayImg.at<uchar>(i-1, j-1)
+                                                    - 2 * grayImg.at<uchar>(i-1, j) - grayImg.at<uchar>(i-1, j+1)));
+            fy.at<uchar>(i, j) = saturate_cast<uchar>(fabs(grayImg.at<uchar>(i-1, j+1) + 2 * grayImg.at<uchar>(i, j+1)
+                                                    + grayImg.at<uchar>(i+1, j+1) - grayImg.at<uchar>(i-1, j-1)
+                                                    - 2 * grayImg.at<uchar>(i, j-1) - grayImg.at<uchar>(i+1, j-1)));
+            grad.at<uchar>(i, j) = fx.at<uchar>(i, j) + fy.at<uchar>(i, j);
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i, j) - grad.at<uchar>(i, j));
+        }
+    }
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_prewitt_edge_detection_clicked(){
+    Mat grad, gray_img, fx, fy;
+    QImage QTemp1, QTemp2;
+    grad.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    gray_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    fx.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    fy.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    for (int i = 1; i < grayImg.rows - 1; i++){
+        for (int j = 1; j < grayImg.cols - 1, j++){
+            fx.at<uchar>(i, j) = saturate_cast<uchar>(fabs(grayImg.at<uchar>(i+1, j-1) + grayImg.at<uchar>(i+1, j)
+                                                           + grayImg.at<uchar>(i+1, j+1) - grayImg.at<uchar>(i-1, j-1)
+                                                           - grayImg.at<uchar>(i-1, j) - grayImg.at<uchar>(i-1, j+1)));
+            fy.at<uchar>(i, j) = saturate_cast<uchar>(fabs(grayImg.at<uchar>(i-1, j+1) + grayImg.at<uchar>(i, j+1)
+                                                           + grayImg.at<uchar>(i+1, j+1) - grayImg.at<uchar>(i-1, j-1)
+                                                           - grayImg.at<uchar>(i, j-1) - grayImg.at<uchar>(i+1, j-1)));
+//            grad.at<uchar>(i, j) = fx.at<uchar>(i, j) + fy.at<uchar>(i, j);
+            grad.at<uchar>(i, j) = max(fx.at<uchar>(i, j), fy.at<uchar>(i, j));
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i, j) - grad.at<uchar>(i, j));
+        }
+    }
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_laplacian_edge_detection_clicked(){
+    Mat grad, gray_img
+    QImage QTemp1, QTemp2;
+    grad.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    gray_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    for (int i = 1; i < grayImg.rows - 1; i++){
+        for (int j = 1; j < grayImg.cols - 1, j++){
+            grad.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i-1, j) - 4 * grayImg.at<uchar>(i, j)
+                                                        + grayImg.at<uchar>(i+1, j) + grayImg.at<uchar>(i, j-1)
+                                                        + grayImg.at<uchar>(i, j+1));
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(- grayImg.at<uchar>(i-1, j) + 5 * grayImg.at<uchar>(i, j)
+                                                            - grayImg.at<uchar>(i+1, j) - grayImg.at<uchar>(i, j-1)
+                                                            - grayImg.at<uchar>(i, j+1))
+        }
+    }
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
+}
 
 void on_krisch_edge_detection_clicked();
 

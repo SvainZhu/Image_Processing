@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.20)
 project(Image_Processing)
 
 set(CMAKE_CXX_STANDARD 14)
@@ -11,6 +11,8 @@ find_package(Qt5 COMPONENTS
         Gui
         Widgets
         REQUIRED)
+
+qt5_add_resources(RESOURCES qml.qrc)
 
 add_executable(MainWindow.cpp)
 target_link_libraries(Image_Processing
