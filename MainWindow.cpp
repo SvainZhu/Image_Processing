@@ -342,6 +342,172 @@ void MainWindow::on_laplacian_edge_detection_clicked(){
     ui->label_2->show();
 }
 
-void on_krisch_edge_detection_clicked();
+void MainWindow::on_krisch_edge_detection_clicked(){
+    Mat grad, gray_img, f1, f2, f3, f4, f5, f6, f7, f8;
+    QImage QTemp1, QTemp2;
+    grad.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    gray_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f1.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f2.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f3.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f4.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f5.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f6.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f7.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    f8.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    for (int i = 1; i < grayImg.rows - 1; i++){
+        for (int j = 1; j < grayImg.cols - 1, j++){
+            f1.at<uchar>(i, j) = saturate_cast<uchar>(fabs(- 5 * grayImg.at<uchar>(i-1, j-1) - 5 * grayImg.at<uchar>(i-1, j)
+                                                            - 5 * grayImg.at<uchar>(i-1, j+1) + 3 * grayImg.at<uchar>(i, j-1)
+                                                            + 3 * grayImg.at<uchar>(i, j+1) + 3 * grayImg.at<uchar>(i+1, j-1)
+                                                            + 3 * grayImg.at<uchar>(i+1, j) + 3 * grayImg.at<uchar>(i+1, j+1)));
+            f2.at<uchar>(i, j) = saturate_cast<uchar>(fabs( 3 * grayImg.at<uchar>(i-1, j-1) - 5 * grayImg.at<uchar>(i-1, j)
+                                                           - 5 * grayImg.at<uchar>(i-1, j+1) + 3 * grayImg.at<uchar>(i, j-1)
+                                                           - 5 * grayImg.at<uchar>(i, j+1) + 3 * grayImg.at<uchar>(i+1, j-1)
+                                                           + 3 * grayImg.at<uchar>(i+1, j) + 3 * grayImg.at<uchar>(i+1, j+1)));
+            f3.at<uchar>(i, j) = saturate_cast<uchar>(fabs( 3 * grayImg.at<uchar>(i-1, j-1) + 3 * grayImg.at<uchar>(i-1, j)
+                                                           - 5 * grayImg.at<uchar>(i-1, j+1) + 3 * grayImg.at<uchar>(i, j-1)
+                                                           - 5 * grayImg.at<uchar>(i, j+1) + 3 * grayImg.at<uchar>(i+1, j-1)
+                                                           + 3 * grayImg.at<uchar>(i+1, j) - 5 * grayImg.at<uchar>(i+1, j+1)));
+            f4.at<uchar>(i, j) = saturate_cast<uchar>(fabs( 3 * grayImg.at<uchar>(i-1, j-1) + 3 * grayImg.at<uchar>(i-1, j)
+                                                           + 3 * grayImg.at<uchar>(i-1, j+1) + 3 * grayImg.at<uchar>(i, j-1)
+                                                           - 5 * grayImg.at<uchar>(i, j+1) + 3 * grayImg.at<uchar>(i+1, j-1)
+                                                           - 5 * grayImg.at<uchar>(i+1, j) - 5 * grayImg.at<uchar>(i+1, j+1)));
+            f5.at<uchar>(i, j) = saturate_cast<uchar>(fabs( 3 * grayImg.at<uchar>(i-1, j-1) + 3 * grayImg.at<uchar>(i-1, j)
+                                                           + 3 * grayImg.at<uchar>(i-1, j+1) + 3 * grayImg.at<uchar>(i, j-1)
+                                                           + 3 * grayImg.at<uchar>(i, j+1) - 5 * grayImg.at<uchar>(i+1, j-1)
+                                                           - 5 * grayImg.at<uchar>(i+1, j) - 5 * grayImg.at<uchar>(i+1, j+1)));
+            f6.at<uchar>(i, j) = saturate_cast<uchar>(fabs( 3 * grayImg.at<uchar>(i-1, j-1) + 3 * grayImg.at<uchar>(i-1, j)
+                                                            + 3 * grayImg.at<uchar>(i-1, j+1) - 5 * grayImg.at<uchar>(i, j-1)
+                                                            + 3 * grayImg.at<uchar>(i, j+1) - 5 * grayImg.at<uchar>(i+1, j-1)
+                                                            - 5 * grayImg.at<uchar>(i+1, j) + 3 * grayImg.at<uchar>(i+1, j+1)));
+            f7.at<uchar>(i, j) = saturate_cast<uchar>(fabs( - 5 * grayImg.at<uchar>(i-1, j-1) + 3 * grayImg.at<uchar>(i-1, j)
+                                                            + 3 * grayImg.at<uchar>(i-1, j+1) - 5 * grayImg.at<uchar>(i, j-1)
+                                                            + 3 * grayImg.at<uchar>(i, j+1) - 5 * grayImg.at<uchar>(i+1, j-1)
+                                                            + 3 * grayImg.at<uchar>(i+1, j) + 3 * grayImg.at<uchar>(i+1, j+1)));
+            f8.at<uchar>(i, j) = saturate_cast<uchar>(fabs( - 5 * grayImg.at<uchar>(i-1, j-1) - 5 * grayImg.at<uchar>(i-1, j)
+                                                            + 3 * grayImg.at<uchar>(i-1, j+1) - 5 * grayImg.at<uchar>(i, j-1)
+                                                            + 3 * grayImg.at<uchar>(i, j+1) + 3 * grayImg.at<uchar>(i+1, j-1)
+                                                            + 3 * grayImg.at<uchar>(i+1, j) + 3 * grayImg.at<uchar>(i+1, j+1)));
+            QVector<int> f = {f1.at<uchar>(i, j), f2.at<uchar>(i, j), f3.at<uchar>(i, j), f4.at<uchar>(i, j),
+                              f5.at<uchar>(i, j), f6.at<uchar>(i, j), f7.at<uchar>(i, j), f8.at<uchar>(i, j)};
+            auto max_f = std::max_element(std::begin(f), std::end(f));
+            grad.at<uchar>(i, j) = max_f;
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i, j) - grad.at<uchar>(i, j));
+        }
+    }
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
 
-void on_canny_edge_detection_clicked();
+    QTemp2 = QImage((const uchar*)(grad.data), grad.cols, grad.rows, grad.cols * grad.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_canny_edge_detection_clicked(){
+    Mat grad, gray_img, gaussian_signal, fx, fy, max_control;
+    grad.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    gray_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    guassian_signal.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    fx.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    fy.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    QVector<double> direction((grayImg.rows-1) * (grayImg.cols-1), 0);
+
+    for (int i = 0; i < grayImg.rows - 1, i++){
+        for (int j = 0; j < grayImg.cols - 1, j ++){
+            gaussian_signal.at<uchar>(i, j) = saturate_cast<uchar>(fabs(1/16. * ( 1 * grayImg.at<uchar>(i-1, j-1) + 2 * grayImg.at<uchar>(i-1, j)
+                                                                              + 1 * grayImg.at<uchar>(i-1, j+1) + 2 * grayImg.at<uchar>(i, j-1)
+                                                                              + 4 * grayImg.at<uchar>(i, j) + 2 * grayImg.at<uchar>(i, j+1)
+                                                                              + 1 * grayImg.at<uchar>(i+1, j-1) + 2 * grayImg.at<uchar>(i+1, j)
+                                                                              + 2 * grayImg.at<uchar>(i+1, j+1))));
+        }
+    }
+    int k = 0;
+    for (int i = 1; i < guassian_signal.rows - 1; i++){
+        for (int j = 1; j < guassian_signal.cols - 1; j++){
+            fx.at<uchar>(i, j) = saturate_cast<uchar>(fabs( - grayImg.at<uchar>(i-1, j-1) - 2 * grayImg.at<uchar>(i-1, j)
+                                                        - grayImg.at<uchar>(i-1, j+1) + grayImg.at<uchar>(i+1, j-1)
+                                                        + 2 * grayImg.at<uchar>(i+1, j) + grayImg.at<uchar>(i+1, j+1)));
+            fy.at<uchar>(i, j) = saturate_cast<uchar>(fabs( - grayImg.at<uchar>(i-1, j-1) - 2 * grayImg.at<uchar>(i, j-1)
+                                                            - grayImg.at<uchar>(i+1, j-1) + grayImg.at<uchar>(i-1, j+1)
+                                                            + 2 * grayImg.at<uchar>(i, j+1) + grayImg.at<uchar>(i+1, j+1)));
+            grad.at<uchar>(i, j) = sqrt(pow(fx.at<uchar>(i, j), 2) + pow(fy.at<uchar>(i, j), 2));
+
+            if (fx.at<uchar>(i, j) == 0){
+                fx.at<uchar>(i, j) == 1e-6
+            }
+            directioin[k] = atan(fy.at<uchar>(i, j) / fx.at<uchar>(i, j)) * 57.3;
+            direction[k] += 90;
+            k++;
+
+        }
+    }
+    max_control = grad.clone();
+    k = 0;
+    for (int i = 1; i < grad.rows - 1; i++){
+        for (int j = 1; j < grad.cols - 1; j++){
+            if (direction[k] > 0 && direction[k] <= 45){
+                if (grad.at<uchar>(i, j) <= (grad.at<uchar>(i, j+1) + (grad.at<uchar>(i-1, j+1) - grad.at<uchar>(i, j+1))
+                        * tan(direction[i * max_control.rows + j])) || (grad.at<uchar>(i, j) <= (grad.at<uchar>(i, j-1)
+                        + (grad.at<uchar>(i+1, j-1) - grad.at<uchar>(i, j-1)) * tan(direction[i * max_control.rows + j])))){
+                    max_control.at<uchar>(i, j) = 0
+                }
+            }
+
+            if (direction[k] > 45 && direction[k] <= 90){
+                if (grad.at<uchar>(i, j) <= (grad.at<uchar>(i-1, j) + (grad.at<uchar>(i-1, j+1) - grad.at<uchar>(i-1, j+1)
+                * tan(direction[i * max_control.rows + j])) || (grad.at<uchar>(i, j) <= (grad.at<uchar>(i+1, j)
+                + (grad.at<uchar>(i+1, j-1) - grad.at<uchar>(i+1, j)) * tan(direction[i * max_control.rows + j])))){
+                    max_control.at<uchar>(i, j) = 0
+                }
+            }
+
+            if (direction[k] > 90 && direction[k] <= 135){
+                if (grad.at<uchar>(i, j) <= (grad.at<uchar>(i-1, j) + (grad.at<uchar>(i-1, j-1) - grad.at<uchar>(i-1, j)
+                * tan(direction[i * max_control.rows + j])) || (grad.at<uchar>(i, j) <= (grad.at<uchar>(i+1, j)
+                + (grad.at<uchar>(i+1, j+1) - grad.at<uchar>(i+1, j)) * tan(direction[i * max_control.rows + j])))){
+                    max_control.at<uchar>(i, j) = 0
+                }
+            }
+
+            if (direction[k] > 135 && direction[k] <= 180){
+                if (grad.at<uchar>(i, j) <= (grad.at<uchar>(i, j-1) + (grad.at<uchar>(i-1, j-1) - grad.at<uchar>(i, j-1)
+                * tan(direction[i * max_control.rows + j])) || (grad.at<uchar>(i, j) <= (grad.at<uchar>(i, j+1)
+                + (grad.at<uchar>(i+1, j+1) - grad.at<uchar>(i, j)) * tan(direction[i * max_control.rows + j])))){
+                    max_control.at<uchar>(i, j) = 0
+                }
+            }
+            k++;
+        }
+    }
+    double_threshold(max_control, 15, 55);
+    double_threshold_link(max_control, 15, 55);
+    for (int i = 0; i < grayImg.rows - 1; i++){
+        for (int j = 0; j < grayImg.cols - 1; j++){
+            gray_img.at<uchar>(i, j) = saturate_cast<uchar>(grayImg.at<uchar>(i, j) - max_control.at<uchar>(i, j));
+        }
+    }
+
+    QTemp1 = QImage((const uchar*)(gray_img.data), gray_img.cols, gray_img.rows, gray_img.cols * gray_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size);
+    ui->label_3->show();
+
+    QTemp2 = QImage((const uchar*)(max_control.data), max_control.cols, max_control.rows, max_control.cols * max_control.channels(), QImage::Format_Indexed8);
+    Ui->label_2->setPixmap(QPixmap::fromImage(QTemp2));
+    QTemp2 = QTemp2.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp2.size);
+    ui->label_2->show();
+
+}

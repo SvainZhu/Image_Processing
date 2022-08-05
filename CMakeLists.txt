@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+set (CMAKE_PREFIX_PATH "C:\\Qt\\5.15.2\\msvc2019_64\\")
 
 find_package(Qt5 COMPONENTS
         Core
@@ -14,7 +15,7 @@ find_package(Qt5 COMPONENTS
 
 qt5_add_resources(RESOURCES qml.qrc)
 
-add_executable(MainWindow.cpp)
+add_executable(main.cpp)
 target_link_libraries(Image_Processing
         Qt5::Core
         Qt5::Gui
