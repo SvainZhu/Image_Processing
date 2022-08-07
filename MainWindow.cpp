@@ -423,11 +423,11 @@ void MainWindow::on_canny_edge_detection_clicked(){
 
     for (int i = 0; i < grayImg.rows - 1, i++){
         for (int j = 0; j < grayImg.cols - 1, j ++){
-            gaussian_signal.at<uchar>(i, j) = saturate_cast<uchar>(fabs(1/16. * ( 1 * grayImg.at<uchar>(i-1, j-1) + 2 * grayImg.at<uchar>(i-1, j)
+            gaussian_signal.at<uchar>(i, j) = saturate_cast<uchar>(fabs(( 1 * grayImg.at<uchar>(i-1, j-1) + 2 * grayImg.at<uchar>(i-1, j)
                                                                               + 1 * grayImg.at<uchar>(i-1, j+1) + 2 * grayImg.at<uchar>(i, j-1)
                                                                               + 4 * grayImg.at<uchar>(i, j) + 2 * grayImg.at<uchar>(i, j+1)
                                                                               + 1 * grayImg.at<uchar>(i+1, j-1) + 2 * grayImg.at<uchar>(i+1, j)
-                                                                              + 2 * grayImg.at<uchar>(i+1, j+1))));
+                                                                              + 2 * grayImg.at<uchar>(i+1, j+1)) / 16 ));
         }
     }
     int k = 0;
@@ -510,4 +510,154 @@ void MainWindow::on_canny_edge_detection_clicked(){
     ui->label_2->resize(QTemp2.size);
     ui->label_2->show();
 
+}
+
+void MainWindow::on_window_filter_clicked(){
+    Mat filter_img;
+    QImage QTemp;
+    QVector<double> window(8, 0), min_img(8, 0);
+
+    filter_img = guassianNoiseImg.clone();
+
+    for (int i = 1; i < guassianNoiseImg.rows - 1; i++){
+        for (int j = 1; j < guassianNoiseImg.cols - 1; j++){
+            for (int k = 0; k < 3; k++){
+                window[0] = (guassianNoiseImg.at<Vec3b>(i-1, j-1)[k] + guassianNoiseImg.at<Vec3b>(i-1, j)[k] +
+                        guassianNoiseImg.at<Vec3b>(i, j-1)[k] + guassianNoiseImg.at<Vec3b>(i, j)[k]) / 4;
+                window[1] = (guassianNoiseImg.at<Vec3b>(i-1, j)[k] + guassianNoiseImg.at<Vec3b>(i-1, j+1)[k] +
+                             guassianNoiseImg.at<Vec3b>(i, j)[k] + guassianNoiseImg.at<Vec3b>(i, j+1)[k]) / 4;
+                window[2] = (guassianNoiseImg.at<Vec3b>(i, j)[k] + guassianNoiseImg.at<Vec3b>(i, j+1)[k] +
+                             guassianNoiseImg.at<Vec3b>(i+1, j)[k] + guassianNoiseImg.at<Vec3b>(i+1, j+1)[k]) / 4;
+                window[3] = (guassianNoiseImg.at<Vec3b>(i, j-1)[k] + guassianNoiseImg.at<Vec3b>(i, j)[k] +
+                             guassianNoiseImg.at<Vec3b>(i+1, j-1)[k] + guassianNoiseImg.at<Vec3b>(i+1, j)[k]) / 4;
+                window[4] = (guassianNoiseImg.at<Vec3b>(i-1, j-1)[k] + guassianNoiseImg.at<Vec3b>(i-1, j)[k] +
+                             guassianNoiseImg.at<Vec3b>(i-1, j+1)[k] + guassianNoiseImg.at<Vec3b>(i, j-1)[k] +
+                             guassianNoiseImg.at<Vec3b>(i, j)[k] + guassianNoiseImg.at<Vec3b>(i, j+1)[k]) / 6;
+                window[5] = (guassianNoiseImg.at<Vec3b>(i, j-1)[k] + guassianNoiseImg.at<Vec3b>(i, j)[k] +
+                             guassianNoiseImg.at<Vec3b>(i, j+1)[k] + guassianNoiseImg.at<Vec3b>(i+1, j-1)[k] +
+                             guassianNoiseImg.at<Vec3b>(i+1, j)[k] + guassianNoiseImg.at<Vec3b>(i+1, j+1)[k]) / 6;
+                window[6] = (guassianNoiseImg.at<Vec3b>(i-1, j-1)[k] + guassianNoiseImg.at<Vec3b>(i, j-1)[k] +
+                             guassianNoiseImg.at<Vec3b>(i+1, j-1)[k] + guassianNoiseImg.at<Vec3b>(i-1, j)[k] +
+                             guassianNoiseImg.at<Vec3b>(i, j)[k] + guassianNoiseImg.at<Vec3b>(i+1, j)[k]) / 6;
+                window[7] = (guassianNoiseImg.at<Vec3b>(i-1, j)[k] + guassianNoiseImg.at<Vec3b>(i, j)[k] +
+                             guassianNoiseImg.at<Vec3b>(i+1, j)[k] + guassianNoiseImg.at<Vec3b>(i-1, j+1)[k] +
+                             guassianNoiseImg.at<Vec3b>(i, j+1)[k] + guassianNoiseImg.at<Vec3b>(i+1, j+1)[k]) / 6;
+
+                for (int n = 0; n < 8; n++){
+                    min_img[n] = pow(window[n] - guassianNoiseImg.at<Vec3b>(i, j)[k], 2);
+                }
+                auto smallest = std::min_element(std::begin(min_img), std::end(min_img));
+                int position = std::distance(std::begin(min_img), smallest);
+                filter_img.at<Vec3b>(i, j)[k] = saturate_cast<uchar>(window[position]);
+
+            }
+        }
+    }
+
+    QTemp = QImage((const uchar*)(filter_img.data), filter_img.cols, filter_img.rows, filter_img.cols * filter_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size);
+    ui->label_3->show();
+}
+
+void MainWindow::on_average_filter_clicked(){
+    Mat filter_img;
+    QImage QTemp;
+
+    filter_img = guassianNoiseImg.clone();
+
+    for (int i = 1; i < guassianNoiseImg.rows - 1; i++){
+        for (int j = 1; j < guassianNoiseImg.cols - 1; j++){
+            for (int k = 0; k < 3; k++){
+                filter_img.at<Vec3b>(i, j)[k] = saturate_cast<uchar>((guassianNoiseImg.at<Vec3b>(i-1, j-1)[k] +
+                        guassianNoiseImg.at<Vec3b>(i-1, j)[k] + guassianNoiseImg.at<Vec3b>(i-1, j+1)[k] +
+                        guassianNoiseImg.at<Vec3b>(i, j-1)[k] + guassianNoiseImg.at<Vec3b>(i, j)[k] +
+                        guassianNoiseImg.at<Vec3b>(i, j+1)[k] + guassianNoiseImg.at<Vec3b>(i+1, j-1)[k] +
+                        guassianNoiseImg.at<Vec3b>(i+1, j)[k] + guassianNoiseImg.at<Vec3b>(i+1, j+1)[k]) / 9);
+            }
+        }
+    }
+
+    QTemp = QImage((const uchar*)(filter_img.data), filter_img.cols, filter_img.rows, filter_img.cols * filter_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size);
+    ui->label_3->show();
+
+}
+
+void MainWindow::on_middle_filter_clicked(){
+    Mat filter_img;
+    QImage QTemp;
+    QVector<double> middle(9, 0);
+
+    filter_img = guassianNoiseImg.clone();
+
+    for (int i = 1; i < guassianNoiseImg.rows - 1; i++){
+        for (int j = 1; j < guassianNoiseImg.cols - 1; j++){
+            for (int k = 0; k < 3; k++){
+                middle = [guassianNoiseImg.at<Vec3b>(i-1, j-1)[k], guassianNoiseImg.at<Vec3b>(i-1, j)[k],
+                        guassianNoiseImg.at<Vec3b>(i-1, j+1)[k], guassianNoiseImg.at<Vec3b>(i, j-1)[k],
+                        guassianNoiseImg.at<Vec3b>(i, j)[k], guassianNoiseImg.at<Vec3b>(i, j+1)[k],
+                        guassianNoiseImg.at<Vec3b>(i+1, j-1)[k], guassianNoiseImg.at<Vec3b>(i+1, j)[k],
+                        guassianNoiseImg.at<Vec3b>(i+1, j+1)[k]];
+                std::sort(std::begin(middle), std::end(middle))
+                filter_img.at<Vec3b>(i, j)[k] = saturate_cast<uchar>(middle[5]);
+            }
+        }
+    }
+
+    QTemp = QImage((const uchar*)(filter_img.data), filter_img.cols, filter_img.rows, filter_img.cols * filter_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size);
+    ui->label_3->show();
+}
+
+void MainWindow::on_gaussian_filter_clicked(){
+    Mat filter_img;
+    QImage QTemp;
+    QVector<double> middle(9, 0);
+
+    filter_img = guassianNoiseImg.clone();
+
+    for (int i = 1; i < guassianNoiseImg.rows - 1; i++){
+        for (int j = 1; j < guassianNoiseImg.cols - 1; j++){
+            for (int k = 0; k < 3; k++){
+                filter_img.at<Vec3b>(i, j)[k] = saturate_cast<uchar>((guassianNoiseImg.at<Vec3b>(i-1, j-1)[k] +
+                        2 * guassianNoiseImg.at<Vec3b>(i-1, j)[k] + guassianNoiseImg.at<Vec3b>(i-1, j+1)[k] +
+                        2 * guassianNoiseImg.at<Vec3b>(i, j-1)[k] + 4 * guassianNoiseImg.at<Vec3b>(i, j)[k] +
+                        2 * guassianNoiseImg.at<Vec3b>(i, j+1)[k] + guassianNoiseImg.at<Vec3b>(i+1, j-1)[k] +
+                        2 * guassianNoiseImg.at<Vec3b>(i+1, j)[k] + guassianNoiseImg.at<Vec3b>(i+1, j+1)[k]) / 16);
+            }
+        }
+    }
+
+    QTemp = QImage((const uchar*)(filter_img.data), filter_img.cols, filter_img.rows, filter_img.cols * filter_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size);
+    ui->label_3->show();
+}
+
+void MainWindow::on_form_filter_clicked(){
+    Mat filter_img, rgb_img, temp;
+    QImage QTemp;
+
+    Mat element = getStructuringElement(MORPH_RECT,Size(15,15));
+    cvtColor(srcImg, rgb_img, CV_BGR2RGB);
+    erode(rgb_img, temp, element);
+    dilate(temp, filter_img, element);
+
+    QTemp = QImage((const uchar*)(filter_img.data), filter_img.cols, filter_img.rows, filter_img.step, QImage::Format_RGB888);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size);
+    ui->label_3->show();
 }

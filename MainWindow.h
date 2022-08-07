@@ -75,6 +75,16 @@ private slots:
 
     void on_canny_edge_detection_clicked();
 
+    void on_window_filter_clicked();
+
+    void on_average_filter_clicked();
+
+    void on_middle_filter_clicked();
+
+    void on_gaussian_filter_clicked();
+
+    void on_form_filter_clicked();
+
 private:
     Ui::MainWindow * ui;
 
