@@ -89,17 +89,18 @@ private slots:
 
     void on_form_filter_clicked();
 
-//    void on_frame_diff_clicked();
-//
-//    void on_mix_guass_clicked();
-//
-//    void on_circle_LBP_clicked();
-//
-//    void on_SIFT_clicked();
-//
-//    void on_haar1_clicked();
-//
-//    void on_haar2_clicked();
+    void on_frame_diff_clicked();
+
+
+    // TODO void on_mix_guass_clicked();
+
+    // TODO void on_circle_LBP_clicked();
+
+    // TODO void on_SIFT_clicked();
+
+    // TODO void on_haar1_clicked();
+
+    // TODO void on_haar2_clicked();
 
 private:
     Ui::MainWindow *ui;

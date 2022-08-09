@@ -667,15 +667,70 @@ void MainWindow::on_form_filter_clicked(){
     ui->label_3->resize(QTemp.size());
     ui->label_3->show();
 }
-//
-//void on_frame_diff_clicked();
-//
-//void on_mix_guass_clicked();
-//
-//void on_circle_LBP_clicked();
-//
-//void on_SIFT_clicked();
-//
-//void on_haar1_clicked();
-//
-//void on_haar2_clicked();
+
+void MainWindow::on_frame_diff_clicked(){
+    Mat pFrame, pFrame1, pFrame2, pFrame3;
+    Mat pFrameGray1, pFrameGray2, pFrameGray3;
+    Mat pFrameMat1, pFrameMat2;
+    VideoCapture pCapture;
+    int nFrame = 0;
+
+    pCapture = VideoCapture("./video/test.mp4");
+    pCapture >> pFrame;
+    pFrame1.create(pFrame.size(), CV_8UC1);
+    pFrame2.create(pFrame.size(), CV_8UC1);
+    pFrame3.create(pFrame.size(), CV_8UC1);
+    while(1){
+        nFrame++;
+        pCapture >> pFrame1;
+        if (pFrame.data == NULL){
+            return;
+        }
+        pCapture >> pFrame2;
+        pCapture >> pFrame3;
+        cvtColor(pFrame1, pFrameGray1, CV_BGR2GRAY);
+        cvtColor(pFrame2, pFrameGray2, CV_BGR2GRAY);
+        cvtColor(pFrame3, pFrameGray3, CV_BGR2GRAY);
+
+        absdiff(pFrameGray1, pFrameGray2, pFrameMat1);
+        absdiff(pFrameGray2, pFrameGray3, pFrameMat2);
+
+        threshold(pFrameMat1, pFrameMat1, 10, 255, CV_THRESH_BINARY);
+        threshold(pFrameMat2, pFrameMat2, 10, 255, CV_THRESH_BINARY);
+
+        Mat element1 = getStructuringElement(0, cv::Size(3, 3));
+        Mat element2 = getStructuringElement(0, cv::Size(5, 5));
+
+        erode(pFrameMat1, pFrameMat1, element1);
+        erode(pFrameMat2, pFrameMat2, element1);
+
+        dilate(pFrameMat1, pFrameMat1, element2);
+        dilate(pFrameMat2, pFrameMat2, element2);
+
+        imshow("Frame Difference", pFrameMat2);
+
+        vector<vector<Point>> contours;
+        vector<Vec4i> hierarchy;
+        findContours(pFrameMat2, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE);
+        double max_area = 0;
+        int max_index = 0;
+        for (size_t i = 0; i < contours.size(); i++){
+            double area = contourArea(contours[i], false);
+            if (max_area < area){
+                max_area = area;
+                max_index = i;
+            }
+        }
+        if (max_index != 0){
+            drawContours(pFrame2, contours, max_index, Scalar(0, 0, 255), 2);
+        }
+
+        imshow("Source Image", pFrame2);
+        if (waitKey(1) != -1){
+            break;
+        }
+    }
+    pCapture.release();
+    cv::destroyAllWindows();
+
+}
