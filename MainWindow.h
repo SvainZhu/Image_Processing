@@ -92,11 +92,11 @@ private slots:
     void on_frame_diff_clicked();
 
 
-    // TODO void on_mix_guass_clicked();
+    void on_mix_gauss_clicked();
 
-    // TODO void on_circle_LBP_clicked();
+    void on_circle_LBP_clicked();
 
-    // TODO void on_SIFT_clicked();
+    void on_SIFT_clicked();
 
     // TODO void on_haar1_clicked();
 

@@ -126,3 +126,31 @@ void double_threshold_link(Mat &src, double low_threshold, double high_threshold
         }
     }
 }
+
+void lbp_operator(Mat& src, Mat& dst, int radius, int neighbors){
+    for (int n = 0; n < neighbors; n++){
+        float x = static_cast<float>(-radius * sin(2.0 * CV_PI*n / static_cast<float>(neighbors)));
+        float y = static_cast<float>(radius * cos(2.0 * CV_PI*n / static_cast<float>(neighbors)));
+
+        int floor_x = static_cast<int>(floor(x));
+        int floor_y = static_cast<int>(floor(y));
+        int ceil_x = static_cast<int>(ceil(x));
+        int ceil_y = static_cast<int>(ceil(y));
+
+        float decimal_x = x - floor_x;
+        float decimal_y = y - floor_y;
+
+        float w1 = (1 - decimal_x) * (1 - decimal_y);
+        float w2 = decimal_x * (1 - decimal_y);
+        float w3 = (1 - decimal_x) * decimal_y;
+        float w4 = decimal_x * decimal_y;
+
+        for (int i = radius; i < src.rows - radius; i++){
+            for (int j = radius; j < src.cols - radius; j++){
+                float t = static_cast<float>(w1 * src.at<uchar>(i+floor_y, j+floor_x) + w2 * src.at<uchar>(i+floor_y, j+ceil_x)
+                                            + w3 * src.at<uchar>(i+ceil_y, j+floor_x) + w4 * src.at<uchar>(i+ceil_y, j+ceil_x));
+                dst.at<uchar>(i-radius, j-radius) += ((t > src.at<uchar>(i, j)) || (abs(t-src.at<uchar>(i, j)) < numeric_limits<float>::epsilon())) << n;
+            }
+        }
+    }
+}

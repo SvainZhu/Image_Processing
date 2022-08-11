@@ -18,7 +18,6 @@ MainWindow::~MainWindow(){
 void MainWindow::on_select_images_clicked(){
     QString img_name = QFileDialog::getOpenFileName(this, tr(""), "../img/", "files(*)");
     srcImg = imread(img_name.toStdString());
-    cvtColor(srcImg, grayImg, CV_BGR2GRAY);
 
     Mat temp;
     QImage QTemp;
@@ -732,5 +731,91 @@ void MainWindow::on_frame_diff_clicked(){
     }
     pCapture.release();
     cv::destroyAllWindows();
+
+}
+
+void MainWindow::on_mix_gauss_clicked(){
+    Mat gray_img, foreground1, foreground2, pFrame;
+    Ptr<BackgroundSubtractorKNN> ptrKNN = createBackgroundSubtractorKNN(500, 400.0, true);
+    Ptr<BackgroundSubtractorMOG2> ptrMOG2 = createBackgroundSubtractorMOG2(500, 16, true);
+    namedWindow("Extracted Foreground");
+    VideoCapture pCapture;
+    pCapture = VideoCapture("./video/test.mp4");
+
+    while (1){
+        pCapture >> pFrame;
+        if (pFrame.data == NULL){
+            return;
+        }
+        cvtColor(pFrame, gray_img, CV_BGR2GRAY);
+        long long t1 = getTickCount();
+        ptrKNN->apply(pFrame, foreground1, -1);
+        long long t2 = getTickCount();
+        ptrMOG2->apply(pFrame, foreground2, -1);
+        long long t3 = getTickCount();
+        cout << "Time cost of KNN is " << t2 - t1 << "\n Time cost of MOG2 is " << t3 - t2 << endl;
+        imshow("Source video frame", pFrame);
+        imshow("Extracted foreground of KNN", foreground1);
+        imshow("Extracted foreground of MOG2", foreground2);
+        if (waitKey(1) != -1){
+            break;
+        }
+    }
+    cv::destroyAllWindows();
+}
+
+void MainWindow::on_circle_LBP_clicked(){
+    QImage QTemp1, QTemp2, QTemp3, QTemp4;
+    Mat Temp;
+    int radius = 1, neighbors=8;
+
+    Mat dst = Mat(grayImg.rows - 2 * radius, grayImg.cols - 2 * radius, CV_8UC1, Scalar(0));
+    lbp_operator(grayImg, dst, radius, neighbors);
+    QTemp1 = QImage((const uchar*)(dst.data), dst.cols, dst.rows, dst.cols*dst.channels(), QImage::Format_Indexed8);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp1.size());
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_SIFT_clicked(){
+    QString img_name1 = QFileDialog::getOpenFileName(this, tr(""), "../img/", "files(*)");
+    Mat src_img1 = imread(img_name1.toStdString());
+    QString img_name2 = QFileDialog::getOpenFileName(this, tr(""), "../img/", "files(*)");
+    Mat src_img2 = imread(img_name2.toStdString());
+    imshow("Source image 1", src_img1);
+    imshow("Source image 2", src_img2);
+    Ptr<SIFT> SIFT_detector = SIFT::create();
+    vector<KeyPoint> kp1, kp2;
+    Mat descriptor1, descriptor2, res1, res2, trans_img1, trans_img2;
+    char str1[20], str2[20];
+
+    SIFT_detector->detect(src_img1, kp1);
+    SIFT_detector->compute(src_img1, descriptor1);
+    drawKeypoints(src_img1, kp1, res1);
+    trans_img1 = src_img1.clone();
+    sprintf(str1, "%d", kp1.size());
+    putText(trans_img1, str1, Point(280, 230), 0, 1.0, Scalar(255, 0, 0), 2);
+    imshow("Descriptor ", trans_img1);
+
+    SIFT_detector->detect(src_img2, kp2);
+    SIFT_detector->compute(src_img2, descriptor2);
+    drawKeypoints(src_img2, kp2, res2);
+    trans_img2 = src_img2.clone();
+    sprintf(str2, "%d", kp2.size());
+    putText(trans_img2, str2, Point(280, 230), 0, 1.0, Scalar(255, 0, 0), 2);
+    imshow("Descriptor ", trans_img2);
+
+    BFMatcher matcher(NORM_L2, true);
+    vector<DMatch> matches;
+    matcher.match(descriptor1, descriptor2, matches);
+    Mat img_match;
+    drawMatches(src_img1, kp1, src_img2, kp2, matches, img_match);
+    imshow("Match", img_match);
+    waitKey(0);
+    cv::destroyAllWindows();
+    waitKey(1);
 
 }
