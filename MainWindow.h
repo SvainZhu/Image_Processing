@@ -98,9 +98,9 @@ private slots:
 
     void on_SIFT_clicked();
 
-    // TODO void on_haar1_clicked();
+    void on_haar_vertical_clicked();
 
-    // TODO void on_haar2_clicked();
+    void on_haar_horizontal_clicked();
 
 private:
     Ui::MainWindow *ui;

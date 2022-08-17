@@ -154,3 +154,8 @@ void lbp_operator(Mat& src, Mat& dst, int radius, int neighbors){
         }
     }
 }
+
+double sum_of_rect(Mat& src, Rect& rect){
+    int x = rect.x, y = rect.y, width = rect.width, height = rect.height;
+    return src.at<double>(y, x) + src.at<double>(y+height, x+width) - src.at<double>(y+height, x) - src.at<double>(y, x+width);
+}

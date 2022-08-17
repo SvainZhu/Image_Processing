@@ -793,7 +793,7 @@ void MainWindow::on_SIFT_clicked(){
     char str1[20], str2[20];
 
     SIFT_detector->detect(src_img1, kp1);
-    SIFT_detector->compute(src_img1, descriptor1);
+    SIFT_detector->compute(src_img1, kp1, descriptor1);
     drawKeypoints(src_img1, kp1, res1);
     trans_img1 = src_img1.clone();
     sprintf(str1, "%d", kp1.size());
@@ -801,7 +801,7 @@ void MainWindow::on_SIFT_clicked(){
     imshow("Descriptor ", trans_img1);
 
     SIFT_detector->detect(src_img2, kp2);
-    SIFT_detector->compute(src_img2, descriptor2);
+    SIFT_detector->compute(src_img2, kp2, descriptor2);
     drawKeypoints(src_img2, kp2, res2);
     trans_img2 = src_img2.clone();
     sprintf(str2, "%d", kp2.size());
@@ -819,3 +819,61 @@ void MainWindow::on_SIFT_clicked(){
     waitKey(1);
 
 }
+
+void MainWindow::on_haar_vertical_clicked(){
+    if (grayImg.empty()){
+        cvtColor(srcImg, grayImg, COLOR_BGR2GRAY);
+    }
+    Mat sum_img = Mat::zeros(grayImg.rows + 1, grayImg.cols + 1, CV_32FC1);
+    integral(grayImg, sum_img, CV_64F);
+
+    int step_x = 8, step_y = 8;
+    Rect rect1, rect2;
+    Mat haar_img = Mat::zeros(srcImg.size(), CV_32FC1);
+    for (int i = 0; i < srcImg.rows; i = i + step_x){
+        for (int j = 0; j < srcImg.cols; j = j + step_y){
+            rect1 = Rect(j, i, 2, 4);
+            rect2 = Rect(j+2, i, 2, 4);
+            haar_img.at<float>(i, j) = sum_of_rect(grayImg, rect1) - sum_of_rect(grayImg, rect2);
+        }
+    }
+
+    QImage QTemp1;
+    QTemp1 = QImage((const uchar*)(haar_img.data), haar_img.cols, haar_img.rows, haar_img.cols*haar_img.channels(), QImage::Format_Indexed8);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp1.size());
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_haar_horizontal_clicked() {
+    if (grayImg.empty()) {
+        cvtColor(srcImg, grayImg, COLOR_BGR2GRAY);
+    }
+    Mat sum_img = Mat::zeros(grayImg.rows + 1, grayImg.cols + 1, CV_32FC1);
+    integral(grayImg, sum_img, CV_64F);
+
+    int step_x = 8, step_y = 8;
+    Rect rect1, rect2;
+    Mat haar_img = Mat::zeros(srcImg.size(), CV_32FC1);
+    for (int i = 0; i < srcImg.rows; i = i + step_x) {
+        for (int j = 0; j < srcImg.cols; j = j + step_y) {
+            rect1 = Rect(j, i, 2, 4);
+            rect2 = Rect(j, i + 2, 2, 4);
+            haar_img.at<float>(i, j) = sum_of_rect(grayImg, rect1) - sum_of_rect(grayImg, rect2);
+        }
+    }
+
+    QImage QTemp1;
+    QTemp1 = QImage((const uchar *) (haar_img.data), haar_img.cols, haar_img.rows, haar_img.cols * haar_img.channels(),
+                    QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp1));
+    QTemp1 = QTemp1.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp1.size());
+    ui->label_3->show();
+}
+
+

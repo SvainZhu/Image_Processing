@@ -26,4 +26,6 @@ void double_threshold_link(Mat &src, double low_threshold, double high_threshold
 
 void lbp_operator(Mat& src, Mat& dst, int radius, int neighbors);
 
+double sum_of_rect(Mat& src, Rect& rect);
+
 #endif //IMAGE_PROCESSING_BASE_PROC_H
