@@ -91,16 +91,25 @@ private slots:
 
     void on_frame_diff_clicked();
 
-
     void on_mix_gauss_clicked();
 
     void on_circle_LBP_clicked();
 
     void on_SIFT_clicked();
 
+    void on_orb_clicked();
+
     void on_haar_vertical_clicked();
 
     void on_haar_horizontal_clicked();
+
+    void on_haar_face_clicked();
+
+    void on_color_fit_clicked();
+
+    void on_svm_clicked();
+
+    void on_word_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -16,7 +16,7 @@ MainWindow::~MainWindow(){
 }
 
 void MainWindow::on_select_images_clicked(){
-    QString img_name = QFileDialog::getOpenFileName(this, tr(""), "../img/", "files(*)");
+    QString img_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
     srcImg = imread(img_name.toStdString());
 
     Mat temp;
@@ -781,9 +781,9 @@ void MainWindow::on_circle_LBP_clicked(){
 }
 
 void MainWindow::on_SIFT_clicked(){
-    QString img_name1 = QFileDialog::getOpenFileName(this, tr(""), "../img/", "files(*)");
+    QString img_name1 = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
     Mat src_img1 = imread(img_name1.toStdString());
-    QString img_name2 = QFileDialog::getOpenFileName(this, tr(""), "../img/", "files(*)");
+    QString img_name2 = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
     Mat src_img2 = imread(img_name2.toStdString());
     imshow("Source image 1", src_img1);
     imshow("Source image 2", src_img2);
@@ -796,7 +796,7 @@ void MainWindow::on_SIFT_clicked(){
     SIFT_detector->compute(src_img1, kp1, descriptor1);
     drawKeypoints(src_img1, kp1, res1);
     trans_img1 = src_img1.clone();
-    sprintf(str1, "%d", kp1.size());
+    sprintf(str1, "%zd", kp1.size());
     putText(trans_img1, str1, Point(280, 230), 0, 1.0, Scalar(255, 0, 0), 2);
     imshow("Descriptor ", trans_img1);
 
@@ -804,7 +804,7 @@ void MainWindow::on_SIFT_clicked(){
     SIFT_detector->compute(src_img2, kp2, descriptor2);
     drawKeypoints(src_img2, kp2, res2);
     trans_img2 = src_img2.clone();
-    sprintf(str2, "%d", kp2.size());
+    sprintf(str2, "%zd", kp2.size());
     putText(trans_img2, str2, Point(280, 230), 0, 1.0, Scalar(255, 0, 0), 2);
     imshow("Descriptor ", trans_img2);
 
@@ -814,6 +814,91 @@ void MainWindow::on_SIFT_clicked(){
     Mat img_match;
     drawMatches(src_img1, kp1, src_img2, kp2, matches, img_match);
     imshow("Match", img_match);
+    waitKey(0);
+    cv::destroyAllWindows();
+    waitKey(1);
+
+}
+
+void MainWindow::on_orb_clicked() {
+    QString object_name, scene_name;
+    Mat object_img, scene_img;
+    do {
+        object_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+        object_img = imread(object_name.toStdString());
+        cout << "Error Object Image!! Please choose a new object image again!!" << endl;
+    } while ((object_img.empty()));
+
+    do {
+        scene_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+        scene_img = imread(scene_name.toStdString());
+        cout << "Error Scene Image!! Please choose a new scene image again!!" << endl;
+    } while ((scene_img.empty()));
+
+    vector<KeyPoint> object_keypoints, scene_keypoints;
+    Mat object_descriptor, scene_descriptor;
+    Ptr<ORB> orb_detector = ORB::create();
+
+    orb_detector->detect(object_img, object_keypoints);
+    orb_detector->compute(object_img, object_keypoints, object_descriptor);
+    orb_detector->detect(scene_img, scene_keypoints);
+    orb_detector->compute(scene_img, scene_keypoints, scene_descriptor);
+
+    // use the hamming filter to compute the similarity
+    BFMatcher bf_matcher(NORM_HAMMING, true);
+    vector<DMatch> matches;
+    bf_matcher.match(object_descriptor, scene_descriptor, matches);
+    Mat matched_img;
+    drawMatches(object_img, object_keypoints, scene_img, scene_keypoints, matches, matched_img);
+    imshow("Matched Image", matched_img);
+
+    // save the matched-pair index
+    vector<int> query_indexes(matches.size()), train_indexes(matches.size());
+    for (size_t i = 0; i < matches.size(); i++) {
+        query_indexes[i] = matches[i].queryIdx;
+        train_indexes[i] = matches[i].trainIdx;
+    }
+
+    // transform matrix
+    Mat H12;
+    vector<Point2f> points1, points2;
+    KeyPoint::convert(object_keypoints, points1, query_indexes);
+    KeyPoint::convert(scene_keypoints, points2, train_indexes);
+
+    int ransacReprojThreshold = 5;
+    H12 = findHomography(Mat(points1), Mat(points2), RANSAC, ransacReprojThreshold);
+    // mask
+    vector<char> matchesMask(matches.size(), 0);
+    Mat points1t;
+    perspectiveTransform(Mat(points1), points1t, H12);
+    for (size_t i = 0; i < points1.size(); i++){
+        if (norm(points2[i] - points1t.at<Point2f>((int)i, 0)) <= ransacReprojThreshold) matchesMask[i] = 1;
+    }
+
+    Mat matched_img_after_mask;
+    drawMatches(object_img, object_keypoints, scene_img, scene_keypoints, matches, matched_img_after_mask,
+                Scalar(0, 0, 255), Scalar::all(-1), matchesMask);
+    vector<Point2f> object_corners(4), scene_corners(4);
+    object_corners[0] = Point(0, 0);
+    object_corners[1] = Point(object_img.cols, 0);
+    object_corners[2] = Point(object_img.cols, object_img.rows);
+    object_corners[3] = Point(0, object_img.rows);
+    perspectiveTransform(object_corners, scene_corners, H12);
+    line(matched_img_after_mask, Point2f((scene_corners[0].x + static_cast<float>(object_img.cols)), scene_corners[0].y),
+         Point2f((scene_corners[1].x + static_cast<float>(object_img.cols)), scene_corners[1].y), Scalar(0, 0, 255), 2);
+    line(matched_img_after_mask, Point2f((scene_corners[1].x + static_cast<float>(object_img.cols)), scene_corners[1].y),
+         Point2f((scene_corners[2].x + static_cast<float>(object_img.cols)), scene_corners[2].y), Scalar(0, 0, 255), 2);
+    line(matched_img_after_mask, Point2f((scene_corners[2].x + static_cast<float>(object_img.cols)), scene_corners[2].y),
+         Point2f((scene_corners[3].x + static_cast<float>(object_img.cols)), scene_corners[3].y), Scalar(0, 0, 255), 2);
+    line(matched_img_after_mask, Point2f((scene_corners[3].x + static_cast<float>(object_img.cols)), scene_corners[3].y),
+         Point2f((scene_corners[0].x + static_cast<float>(object_img.cols)), scene_corners[0].y), Scalar(0, 0, 255), 2);
+
+    float a_tan = atan(abs((scene_corners[3].y - scene_corners[0].y) / (scene_corners[3].x - scene_corners[0].x)));
+    float pi = atan(1) * 4;
+    a_tan = 90 - 180 * a_tan / pi;
+    imshow("Match Image after remove mask points", matched_img_after_mask);
+    imshow("Scene Image", scene_img);
+
     waitKey(0);
     cv::destroyAllWindows();
     waitKey(1);
@@ -876,4 +961,167 @@ void MainWindow::on_haar_horizontal_clicked() {
     ui->label_3->show();
 }
 
+void MainWindow::on_haar_face_clicked() {
+    CascadeClassifier face_cascade;
+    face_cascade.load("./sources/haarcascade_frontalface_alt2.xml");
+    VideoCapture video_capture;
+    video_capture.open(0);
+    if (! video_capture.isOpened()){
+        cout << "No camera is detected! You can choose a already video instead of the direct camera!" << endl;
+    }
+    QString video_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/video/", "files(*)");
+    video_capture.open(video_name.toStdString(), CAP_ANY);
+    Mat img, gray_img;
+    vector<Rect> faces;
+    while (true){
+        video_capture >> img;
+        if (img.empty()) {
+            continue;
+        }
+        if (img.channels() == 3) {
+            cvtColor(img, gray_img, CV_BGR2GRAY);
+        }
+        else if (img.channels() == 3) {
+            gray_img = img;
+        }
+        else throw "Image channel is not matched. Please use the video with three channels or one channel";
+        // detect the face from the image
+        face_cascade.detectMultiScale(gray_img, faces, 1.2, 6, 0, Size(0, 0));
+        if (faces.size() > 0) {
+            for (int i = 0; i < faces.size(); i++) {
+                rectangle(gray_img, Point(faces[i].x, faces[i].y), Point(faces[i].x + faces[i].width, faces[i].y +
+                        faces[i].height), Scalar(0, 255, 0), 1, 8);
+                putText(gray_img, "Face", Point(faces[i].x, faces[i].y - 5), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
 
+            }
+            imshow("Face", gray_img);
+        }
+        else cout << "No face is detected!!!";
+        if (waitKey(1) != -1) break;
+    }
+    cv::destroyWindow("Face");
+}
+
+
+void MainWindow::on_color_fit_clicked() {
+    QString img_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+    Mat src_img = imread(img_name.toStdString());
+    if (!src_img.data || src_img.channels() != 3) throw "Error Image or Error Image Channels!!!";
+    String window_name = "Source Image";
+    namedWindow(window_name, WINDOW_AUTOSIZE);
+    imshow(window_name, src_img);
+    // hue
+    int hsv_hmin = 0, hsv_hmin_max = 360, hsv_hmax = 360, hsv_hmax_max = 360;
+    // saturation
+    int hsv_smin = 0, hsv_smin_max = 255, hsv_smax = 255, hsv_smax_max = 255;
+    // value
+    int hsv_vmin = 106, hsv_vmin_max = 255, hsv_vmax = 255, hsv_vmax_max = 255;
+    Mat norm_img, hsv_img;
+    src_img.convertTo(norm_img, CV_32FC1, 1.0 / 255, 0);
+    cvtColor(norm_img, hsv_img, COLOR_BGR2HSV);
+    window_name = "HSV Image";
+    namedWindow(window_name, WINDOW_GUI_EXPANDED);
+    // adjust the hue
+    createTrackbar("hmin", window_name, &hsv_hmin, hsv_hmin_max);
+    createTrackbar("hmax", window_name, &hsv_hmax, hsv_hmax_max);
+    // adjust the saturation
+    createTrackbar("smin", window_name, &hsv_smin, hsv_smin_max);
+    createTrackbar("smax", window_name, &hsv_smax, hsv_smax_max);
+    // adjust the value
+    createTrackbar("vmin", window_name, &hsv_vmin, hsv_vmin_max);
+    createTrackbar("vmax", window_name, &hsv_vmax, hsv_vmax_max);
+    Mat dst_img = Mat::zeros(src_img.size(), CV_32FC3), mask;
+    inRange(hsv_img, Scalar(hsv_hmin, hsv_smin / float(hsv_smin_max), hsv_vmin / float(hsv_vmin_max)),
+            Scalar(hsv_hmax, hsv_smax / float(hsv_smax_max), hsv_vmax / float(hsv_vmax_max)), mask);
+    for (int i = 0; i < norm_img.rows; i++) {
+        for (int j = 0; j < norm_img.cols; j++) {
+            if (mask.at<uchar>(i, j) == 255) {
+                dst_img.at<Vec3f>(i, j) = norm_img.at<Vec3f>(i, j);
+            }
+        }
+    }
+    imshow("HSV Fit Image", dst_img);
+    waitKey(0);
+    cv::destroyAllWindows();
+    waitKey(1);
+}
+
+void MainWindow::on_svm_clicked() {
+    int width = 512, height = 512;
+    Mat src_img = Mat(height, width, CV_8UC3, Scalar(0, 255, 255));
+
+    double labels[5] = {1.0, -1.0, -1.0, -1.0, 1.0};
+    Mat labels_mat(5, 1, CV_32SC1, labels);
+    float training_data[5][2] = { {501, 300}, {255, 10}, {501, 255}, {10, 501}, {450, 500}};
+    Mat training_data_mat(5, 2, CV_32FC1, training_data);
+
+    Ptr<ml::SVM> svm = ml::SVM::create();
+    svm->setType(ml::SVM::C_SVC);
+    svm->setKernel(ml::SVM::POLY);
+    svm->setDegree(1.0);
+    svm->setTermCriteria(TermCriteria(CV_TERMCRIT_ITER, 100, 1e-6));
+    svm->train(training_data_mat, ml::SampleTypes::ROW_SAMPLE, labels_mat);
+    svm->save("./sources/mnist_svm.xml");
+
+    // testing
+    Mat sample_mat;
+    Vec3b red(0, 0, 255), green(0, 255, 0), blue(255, 0, 0);
+    for (int i = 0; i < src_img.rows; i++) {
+        for (int j = 0; j < src_img.cols; j++) {
+            sample_mat = (Mat_<float>(1, 2) << j, i);
+            float f_response = svm->predict(sample_mat);
+            if (f_response == 1) src_img.at<Vec3b>(i, j) = green;
+            else if (f_response == -1) src_img.at<Vec3b>(i, j) = blue;
+            if (i > 525 - 0.5 * j) src_img.at<Vec3b>(i, j) = green;
+            else src_img.at<Vec3b>(i, j) = blue;
+        }
+    }
+
+    // show the data
+    int thickness = -1, line_type = 8;
+    for (int i = 0; i < training_data_mat.rows; i++) {
+        if (labels[i] == 1) circle(src_img, Point(training_data[i][0], training_data[i][1]), 5, Scalar(0, 0, 0), thickness, line_type);
+        else circle(src_img, Point(training_data[i][0], training_data[i][1]), 5, Scalar(255, 255, 255), thickness, line_type);
+    }
+
+    thickness = 2;
+    line_type = 8;
+    Mat vector = svm->getSupportVectors();
+    int var_count = svm->getVarCount();
+    for (int i = 0; i < vector.rows; i++) {
+        int x = (int)vector.at<float>(i, 0);
+        int y = (int)vector.at<float>(i, 1);
+        circle(src_img, Point(x, y), 6, Scalar(0, 0, 255), thickness, line_type);
+    }
+
+    imshow("circle", src_img);
+    waitKey(0);
+    destroyAllWindows();
+    waitKey(1);
+}
+
+void MainWindow::on_word_clicked() {
+    Ptr<ml::SVM> svm = ml::SVM::load("./sources/SVM_HOG.xml");
+    if (svm->empty()) throw "Fail to load the svm detector!!!";
+
+    QString img_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+    Mat src_img = imread(img_name.toStdString());
+    if (!src_img.data || src_img.channels() != 3) throw "Error Image or Error Image Channels!!!";
+    cv::resize(src_img, src_img, Size(28, 28), 1);
+    imshow("Resource Image", src_img);
+
+    HOGDescriptor hog(Size(14, 14), Size(7, 7), Size(1, 1), Size(7, 7), 9);
+    vector<float> img_descriptor;
+    hog.compute(src_img, img_descriptor, Size(5, 5));
+    Mat sample_mat;
+    sample_mat.create(1, img_descriptor.size(), CV_32FC1);
+
+    for (int i = 0; i < img_descriptor.size(); i++) {
+        sample_mat.at<float>(0, i) = img_descriptor[i];
+    }
+    int result_word = svm->predict(sample_mat);
+    cout << "Result word is " << result_word << endl;
+    waitKey(0);
+    waitKey(1);
+
+}
