@@ -111,6 +111,17 @@ private slots:
 
     void on_word_clicked();
 
+    void on_affine_clicked();
+
+    void on_perspective_clicked();
+
+    void on_threshold_seg_clicked();
+
+    void on_OSTU_clicked();
+
+    void on_kittler_clicked();
+
+
 private:
     Ui::MainWindow *ui;
 

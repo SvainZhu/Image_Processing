@@ -1125,3 +1125,142 @@ void MainWindow::on_word_clicked() {
     waitKey(1);
 
 }
+
+void MainWindow::on_affine_clicked() {
+    QImage QTemp;
+    Point2f scr_tri[3], dst_tri[3];
+    Mat rot_mat(2, 3, CV_32FC1), warp_mat(2, 3, CV_32FC1);
+    Mat dst_img, rgb_img;
+    cvtColor(srcImg, rgb_img, CV_BGR2RGB);
+    dst_img = Mat::zeros(rgb_img.rows, rgb_img.cols, rgb_img.type());
+
+    scr_tri[0] = Point2f(0, 0);
+    scr_tri[1] = Point2f(rgb_img.cols - 1, 0);
+    scr_tri[2] = Point2f(0, rgb_img.rows - 1);
+
+    dst_tri[0] = Point2f(rgb_img.cols * 0.0, rgb_img.rows * 0.33);
+    dst_tri[1] = Point2f(rgb_img.cols * 0.85, rgb_img.rows * 0.25);
+    dst_tri[2] = Point2f(rgb_img.cols * 0.15, rgb_img.rows * 0.7);
+
+    warp_mat = getAffineTransform(scr_tri, dst_tri);
+    warpAffine(rgb_img, dst_img, warp_mat, rgb_img.size());
+
+    QTemp = QImage((const unsigned char*)(dst_img.data), dst_img.cols, dst_img.cols, dst_img.step, QImage::Format_RGB888);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp.size());
+    ui->label_2->show();
+}
+
+void MainWindow::on_perspective_clicked() {
+    QImage QTemp;
+    Point2f src_quad[4], dst_quad[4];
+    Mat warp_mat(3, 3, CV_32FC1);
+    Mat dst_img, rgb_img;
+    cvtColor(srcImg, rgb_img, CV_BGR2RGB);
+    dst_img = Mat::zeros(rgb_img.rows, rgb_img.cols, rgb_img.type());
+
+    src_quad[0] = Point2f(0, 0);                        // top left
+    src_quad[1] = Point2f(rgb_img.cols - 1, 0);         // top right
+    src_quad[2] = Point2f(0, rgb_img.rows - 1);         // bottom left
+    src_quad[3] = Point2f(rgb_img.cols - 1, rgb_img.rows - 1);  // bottom right
+
+    dst_quad[0] = Point2f(rgb_img.cols * 0.05, rgb_img.rows * 0.33);
+    dst_quad[1] = Point2f(rgb_img.cols * 0.9, rgb_img.rows * 0.25);
+    dst_quad[2] = Point2f(rgb_img.cols * 0.2, rgb_img.rows * 0.7);
+    dst_quad[3] = Point2f(rgb_img.cols * 0.8, rgb_img.rows * 0.9);
+
+    warp_mat = getPerspectiveTransform(src_quad, dst_quad);
+    warpAffine(rgb_img, dst_img, warp_mat, rgb_img.size());
+
+    QTemp = QImage((const unsigned char*)(dst_img.data), dst_img.cols, dst_img.rows, dst_img.step, QImage::Format_RGB888);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size());
+    ui->label_3->show();
+
+}
+
+void MainWindow::on_threshold_seg_clicked() {
+    QImage QTemp;
+    Mat dst_img;
+    int threshold = 100;
+    dst_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+
+    for (int i = 0; i < grayImg.rows; i++) {
+        for (int j = 0; j < grayImg.cols; j++) {
+            if (grayImg.at<uchar>(i, j) > threshold) dst_img.at<uchar>(i, j) = 255;
+            else dst_img.at<uchar>(i, j) = 0;
+        }
+    }
+    QTemp = QImage((const unsigned char*)(dst_img.data), dst_img.cols, dst_img.cols, dst_img.cols * dst_img.channels(), QImage::Format_Indexed8);
+    ui->label_3->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_3->setScaledContents(true);
+    ui->label_3->resize(QTemp.size());
+    ui->label_3->show();
+}
+
+void MainWindow::on_OSTU_clicked() {
+    QImage QTemp;
+    Mat dst_img;
+    QVector<int> hist(255, 0);
+    for (int i = 0; i < grayImg.rows; i++) {
+        for (int j = 0; j < grayImg.cols; j++) {
+            hist[grayImg.at<uchar>(i, j)]++;
+        }
+    }
+
+    int T = get_OSTU(hist);
+    dst_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+    for (int i = 0; i < grayImg.rows; i++) {
+        for (int j = 0; j < grayImg.cols; j++) {
+            if (grayImg.at<uchar>(i, j) > T) {
+                dst_img.at<uchar>(i, j) = 255;
+            }
+            else dst_img.at<uchar>(i, j) = 0;
+        }
+    }
+
+    QTemp = QImage((const unsigned char*)(dst_img.data), dst_img.cols, dst_img.rows, dst_img.cols * dst_img.channels(), QImage::Format_Indexed8);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp.size());
+    ui->label_2->show();
+
+}
+
+void MainWindow::on_kittler_clicked() {
+    QImage QTemp;
+    Mat dst_img, temp;
+    temp = grayImg.clone();
+    dst_img.create(grayImg.rows, grayImg.cols, CV_8UC1);
+
+    int grads, sum_grads = 0, sum_gray_grads = 0, kittler;
+    for (int i = 1; i < temp.rows - 1; i++) {
+        uchar* pre = temp.ptr<uchar>(i-1), *cur = temp.ptr<uchar>(i), *next = temp.ptr<uchar>(i+1);
+        for (int j = 1; j < temp.cols - 1; j++) {
+            grads = MAX(abs(pre[j] - next[j]), abs(cur[j - 1] - cur[j + 1]));
+            sum_grads += grads;
+            sum_gray_grads += grads * cur[j];
+        }
+    }
+    kittler = sum_gray_grads / sum_grads;
+    for (int i = 0; i < grayImg.rows; i++) {
+        for (int j = 0; j < grayImg.cols; j++) {
+            if (grayImg.at<uchar>(i, j) > kittler) {
+                dst_img.at<uchar>(i, j) = 255;
+            }
+            else dst_img.at<uchar>(i, j) = 0;
+        }
+    }
+    QTemp = QImage((const unsigned char*)(dst_img.data), dst_img.cols, dst_img.rows, dst_img.cols * dst_img.channels(), QImage::Format_Indexed8);
+    ui->label_2->setPixmap(QPixmap::fromImage(QTemp));
+    QTemp = QTemp.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_2->setScaledContents(true);
+    ui->label_2->resize(QTemp.size());
+    ui->label_2->show();
+}
