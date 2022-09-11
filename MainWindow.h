@@ -129,9 +129,6 @@ private slots:
 
     void on_cloaking_clicked();
 
-    void on_camera1_clicked();
-
-    void on_camera2_clicked();
 
 
 

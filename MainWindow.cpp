@@ -1446,7 +1446,3 @@ void MainWindow::on_cloaking_clicked() {
     video_cap.release();
     destroyAllWindows();
 }
-
-void MainWindow::on_camera1_clicked() {
-
-}
