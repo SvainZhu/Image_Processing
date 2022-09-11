@@ -105,6 +105,8 @@ private slots:
 
     void on_haar_face_clicked();
 
+    void on_gabor_clicked();
+
     void on_color_fit_clicked();
 
     void on_svm_clicked();
@@ -120,6 +122,18 @@ private slots:
     void on_OSTU_clicked();
 
     void on_kittler_clicked();
+
+    void on_model_clicked();
+
+    void on_target_detection_clicked();
+
+    void on_cloaking_clicked();
+
+    void on_camera1_clicked();
+
+    void on_camera2_clicked();
+
+
 
 
 private:

@@ -1264,3 +1264,128 @@ void MainWindow::on_kittler_clicked() {
     ui->label_2->resize(QTemp.size());
     ui->label_2->show();
 }
+
+void MainWindow::on_gabor_clicked() {
+    Mat gray_img;
+    grayImg.convertTo(gray_img, CV_32F);
+
+    int kernel_size = 3;
+    double sigma = 1.0, lambd = CV_PI / 8, gamma = 0.5, psi = 0;
+    double theta[4];
+    // theta normalization direction
+    theta[0] = 0;
+    theta[1] = CV_PI / 4;
+    theta[2] = CV_PI / 2;
+    theta[3] = CV_PI * 3 / 4;
+    vector<Mat> dst_list;
+    Mat temp;
+    // gabor texture detection
+    for (int i = 0; i < 4; i++) {
+        Mat kernel = getGaborKernel(cv::Size(kernel_size, kernel_size), sigma, theta[i], lambd, gamma, psi, CV_32F);
+        Mat dst;
+        filter2D(gray_img, dst, CV_32F, kernel);
+        dst_list.push_back(dst);
+    }
+    // display and save
+    Mat temp1, temp2, dst, binary_dst;
+    for (int i = 0; i < 4; i++) {
+        convertScaleAbs(dst_list[i], dst_list[i]);
+        string img_name = "gabor" + to_string(i);
+        imshow(img_name, dst_list[i]);
+        string save_path = "./result/" + img_name + ".jpg";
+        imwrite(save_path, dst_list[i]);
+    }
+    add(dst_list[0], dst_list[1], temp1);
+    add(dst_list[2], dst_list[3], temp2);
+    add(temp1, temp2, dst);
+    convertScaleAbs(dst, dst, 0.2, 0);
+    threshold(dst, binary_dst, 0, 255, THRESH_BINARY_INV | cv::THRESH_OTSU);
+    imshow("Target Image", dst);
+    imshow("Binary Target Image", binary_dst);
+    imwrite("./result/gabor_binary.jpg", binary_dst);
+    waitKey(0);
+    destroyAllWindows();
+    waitKey(1);
+}
+
+void MainWindow::on_target_detection_clicked() {
+    QImage QTemp1, QTemp2;
+
+    QString img_name1 = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+    Mat src_img1 = imread(img_name1.toStdString());
+    if (!src_img1.data || src_img1.channels() != 3) throw "Error Image or Error Image Channels!!!";
+    cvtColor(src_img1, src_img1, COLOR_BGR2HSV);
+    QString img_name2 = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+    Mat src_img2 = imread(img_name2.toStdString());
+    if (!src_img2.data || src_img2.channels() != 3) throw "Error Image or Error Image Channels!!!";
+    cvtColor(src_img2, src_img2, COLOR_BGR2HSV);
+
+    Mat box = src_img1.clone();
+    int h_bins = 50, s_bins = 60;
+    int hist_size[2] = {h_bins, s_bins};
+    float h_ranges[2] = {0, 180}, s_ranges[2] = {0, 256};
+    const float* ranges[2] = {h_ranges, s_ranges};
+    int channels[2] = {0, 1};
+    double max_val = 0.0;
+    int x_ray, y_ray;
+    for (int i = 0; i < src_img1.rows - src_img2.rows - 1; i++) {
+        for (int j = 0; j < src_img1.cols - src_img2.cols - 1; j++) {
+            for (int x = i; x < src_img2.rows + i; x++) {
+                for (int y = j; y < src_img2.cols + j; y++) {
+                    box.at<Vec3b>(x-i, y-j) = src_img1.at<Vec3b>(x, y);
+                }
+            }
+            MatND hist_src1, hist_src2;
+            calcHist(&box, 1, channels, Mat(), hist_src1, 2, hist_size, ranges, true, false);
+            normalize(hist_src1, hist_src1, 0, 1, NORM_MINMAX, -1, Mat());
+
+            calcHist(&box, 1, channels, Mat(), hist_src2, 2, hist_size, ranges, true, false);
+            normalize(hist_src2, hist_src2, 0, 1, NORM_MINMAX, -1, Mat());
+
+            double comp = compareHist(hist_src1, hist_src2, CV_COMP_CORREL);
+            cout << "The correlation value between source img1 and source img2: " << comp << endl;
+
+            if (comp > max_val) {
+                max_val = comp;
+                x_ray = i;
+                y_ray = j;
+            }
+        }
+    }
+
+    Rect rect(x_ray, y_ray, src_img1.rows, src_img1.cols);
+    rectangle(src_img1, rect, Scalar(255, 0, 0), 1, LINE_8, 0);
+    imshow("Check", src_img1);
+    imshow("Source Image 2", src_img2);
+    waitKey(0);
+    destroyAllWindows();
+    waitKey(1);
+
+}
+
+void MainWindow::on_model_clicked() {
+    QImage QTemp1, QTemp2;
+    double min_val, max_val;
+    Point min_loc, max_loc;
+
+    QString img_name1 = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+    Mat src_img1 = imread(img_name1.toStdString());
+    if (!src_img1.data || src_img1.channels() != 3) throw "Error Image or Error Image Channels!!!";
+    QString img_name2 = QFileDialog::getOpenFileName(this, tr(""), "./resources/img/", "files(*)");
+    Mat src_img2 = imread(img_name2.toStdString());
+    if (!src_img2.data || src_img2.channels() != 3) throw "Error Image or Error Image Channels!!!";
+
+    Mat result;
+    matchTemplate(src_img1, src_img2, result, TM_SQDIFF);
+    normalize(result, result, 1, 0, NORM_MINMAX);
+    minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
+    rectangle(src_img1, Rect(min_loc.x, min_loc.y, src_img2.cols, src_img2.rows), 1, 8, 0);
+    imshow("Source", src_img1);
+    imshow("Template", src_img2);
+    imshow("Result", result);
+    waitKey(0);
+    destroyAllWindows();
+    waitKey(1);
+
+
+}
