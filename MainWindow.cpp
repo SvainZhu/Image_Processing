@@ -1387,5 +1387,66 @@ void MainWindow::on_model_clicked() {
     destroyAllWindows();
     waitKey(1);
 
+}
+
+void MainWindow::on_cloaking_clicked() {
+    // create a VideoCapture object to open a input video file
+    VideoCapture video_cap;
+    QString video_name = QFileDialog::getOpenFileName(this, tr(""), "./resources/video/", "files(*)");
+    video_cap.open(video_name.toStdString());
+    if (!video_cap.isOpened()) {
+        throw "Error opening a video stream or file";
+        return;
+    }
+    Mat background1, background2;
+    for (int i = 0; i < 60; i++) {
+        video_cap >> background1;
+    }
+    for (int i = 0; i < 100; i++) {
+        video_cap >> background2;
+    }
+    while (true) {
+        long t = getTickCount();
+        Mat frame_img;
+        video_cap >> frame_img;
+        if (frame_img.empty()) break;
+        Mat HSV_img;
+        cvtColor(frame_img, HSV_img, CV_BGR2HSV);
+
+        Mat mask1, mask2;
+        inRange(HSV_img, Scalar(0, 120, 70), Scalar(10, 255, 255), mask1);      // h in 0-10
+        inRange(HSV_img, Scalar(170, 120, 70), Scalar(180, 255, 255), mask2);   // h in 170-180
+        mask1 += mask2;
+
+        Mat kernel = Mat::ones(3, 3, CV_32F);
+        morphologyEx(mask1, mask1, MORPH_OPEN, kernel);         // open
+        morphologyEx(mask1, mask1, MORPH_DILATE, kernel);       // dilate
+        bitwise_not(mask1, mask2);
+
+        Mat result1, result2, output;
+        bitwise_and(frame_img, frame_img, result1, mask2);      // not red
+        bitwise_and(background1, background1, result2, mask1);  // red
+        add(result1, result2, output);
+
+        imshow("Cloaking Output", output);
+
+        // detect the ESC key to exit
+        char c = (char) waitKey(5);
+        if (c == 27) break;
+        frame_img.release();
+        HSV_img.release();
+        mask1.release();
+        mask2.release();
+        result1.release();
+        result2.release();
+        output.release();
+        if (waitKey(1) != -1) break;
+
+    }
+    video_cap.release();
+    destroyAllWindows();
+}
+
+void MainWindow::on_camera1_clicked() {
 
 }
