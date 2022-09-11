@@ -1281,7 +1281,7 @@ void MainWindow::on_gabor_clicked() {
     Mat temp;
     // gabor texture detection
     for (int i = 0; i < 4; i++) {
-        Mat kernel = getGaborKernel(cv::Size(kernel_size, kernel_size), sigma, theta[i], lambd, gamma, psi, CV_32F);
+        Mat kernel = getGaborKernel(Size(kernel_size, kernel_size), sigma, theta[i], lambd, gamma, psi, CV_32F);
         Mat dst;
         filter2D(gray_img, dst, CV_32F, kernel);
         dst_list.push_back(dst);
