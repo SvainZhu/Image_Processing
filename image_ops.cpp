@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cctype>
 #include <map>
+#include <numeric>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -59,6 +60,59 @@ std::mt19937 makeRng(unsigned int seed) {
         return std::mt19937(std::random_device{}());
     }
     return std::mt19937(seed);
+}
+
+cv::Mat ensureBgr(const cv::Mat &src) {
+    requireImage(src);
+    if (src.channels() == 3) {
+        return src.clone();
+    }
+    cv::Mat dst;
+    if (src.channels() == 1) {
+        cv::cvtColor(src, dst, cv::COLOR_GRAY2BGR);
+        return dst;
+    }
+    if (src.channels() == 4) {
+        cv::cvtColor(src, dst, cv::COLOR_BGRA2BGR);
+        return dst;
+    }
+    throw std::invalid_argument("Expected 1, 3, or 4 channel image");
+}
+
+cv::Mat binaryMask(const cv::Mat &src, double thresholdValue, bool useOtsu) {
+    const cv::Mat gray = toGray(src);
+    cv::Mat mask;
+    if (useOtsu) {
+        cv::threshold(gray, mask, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    } else {
+        cv::threshold(gray, mask, thresholdValue, 255, cv::THRESH_BINARY);
+    }
+    return mask;
+}
+
+cv::Scalar labelColor(int label) {
+    const int b = (label * 53) % 255;
+    const int g = (label * 97) % 255;
+    const int r = (label * 193) % 255;
+    return cv::Scalar(b, g, r);
+}
+
+double grayMedian(const cv::Mat &gray) {
+    int histSize = 256;
+    const float range[] = {0.0F, 256.0F};
+    const float *histRange = range;
+    cv::Mat hist;
+    cv::calcHist(&gray, 1, nullptr, cv::Mat(), hist, 1, &histSize, &histRange);
+
+    const int target = (gray.rows * gray.cols + 1) / 2;
+    int cumulative = 0;
+    for (int i = 0; i < histSize; ++i) {
+        cumulative += cvRound(hist.at<float>(i));
+        if (cumulative >= target) {
+            return i;
+        }
+    }
+    return 0.0;
 }
 
 }  // namespace
@@ -193,6 +247,34 @@ cv::Mat equalizeHistogram(const cv::Mat &src) {
     return dst;
 }
 
+cv::Mat claheEqualize(const cv::Mat &src, double clipLimit, int tileGridSize) {
+    requireImage(src);
+    if (clipLimit <= 0.0) {
+        throw std::invalid_argument("clipLimit must be positive");
+    }
+    if (tileGridSize <= 0) {
+        throw std::invalid_argument("tileGridSize must be positive");
+    }
+
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(clipLimit,
+                                               cv::Size(tileGridSize, tileGridSize));
+    if (src.channels() == 1) {
+        cv::Mat dst;
+        clahe->apply(src, dst);
+        return dst;
+    }
+
+    cv::Mat lab;
+    cv::cvtColor(ensureBgr(src), lab, cv::COLOR_BGR2Lab);
+    std::vector<cv::Mat> channels;
+    cv::split(lab, channels);
+    clahe->apply(channels[0], channels[0]);
+    cv::merge(channels, lab);
+    cv::Mat dst;
+    cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+    return dst;
+}
+
 cv::Mat adjustBrightnessContrast(const cv::Mat &src, double alpha, double beta) {
     requireImage(src);
     cv::Mat dst;
@@ -213,6 +295,22 @@ cv::Mat gammaCorrection(const cv::Mat &src, double gamma) {
     }
     cv::Mat dst;
     cv::LUT(src, lut, dst);
+    return dst;
+}
+
+cv::Mat grayWorldWhiteBalance(const cv::Mat &src) {
+    requireImage(src);
+    cv::Mat bgr = ensureBgr(src);
+    cv::Scalar mean = cv::mean(bgr);
+    const double grayMean = (mean[0] + mean[1] + mean[2]) / 3.0;
+    std::vector<cv::Mat> channels;
+    cv::split(bgr, channels);
+    for (int i = 0; i < 3; ++i) {
+        const double scale = mean[i] > 0.0 ? grayMean / mean[i] : 1.0;
+        channels[i].convertTo(channels[i], channels[i].type(), scale, 0.0);
+    }
+    cv::Mat dst;
+    cv::merge(channels, dst);
     return dst;
 }
 
@@ -276,6 +374,25 @@ cv::Mat bilateralFilterImage(const cv::Mat &src, int diameter, double sigmaColor
     return dst;
 }
 
+cv::Mat denoiseNlMeans(const cv::Mat &src, float h, int templateWindowSize,
+                       int searchWindowSize) {
+    requireImage(src);
+    if (h < 0.0F) {
+        throw std::invalid_argument("h must be non-negative");
+    }
+    templateWindowSize = oddKernel(templateWindowSize, "templateWindowSize");
+    searchWindowSize = oddKernel(searchWindowSize, "searchWindowSize");
+
+    cv::Mat dst;
+    if (src.channels() == 1) {
+        cv::fastNlMeansDenoising(src, dst, h, templateWindowSize, searchWindowSize);
+    } else {
+        cv::fastNlMeansDenoisingColored(ensureBgr(src), dst, h, h, templateWindowSize,
+                                        searchWindowSize);
+    }
+    return dst;
+}
+
 cv::Mat morphologyImage(const cv::Mat &src, MorphType type, int kernelSize, int iterations) {
     requireImage(src);
     if (iterations <= 0) {
@@ -297,6 +414,17 @@ cv::Mat cannyEdge(const cv::Mat &src, double lowThreshold, double highThreshold,
     return edges;
 }
 
+cv::Mat autoCannyEdge(const cv::Mat &src, double sigma, int apertureSize) {
+    if (sigma < 0.0 || sigma >= 1.0) {
+        throw std::invalid_argument("sigma must be in [0, 1)");
+    }
+    const cv::Mat gray = toGray(src);
+    const double medianValue = grayMedian(gray);
+    const double low = std::max(0.0, (1.0 - sigma) * medianValue);
+    const double high = std::min(255.0, (1.0 + sigma) * medianValue);
+    return cannyEdge(gray, low, high, apertureSize);
+}
+
 cv::Mat sobelEdge(const cv::Mat &src, int dx, int dy, int kernelSize) {
     if (dx < 0 || dy < 0 || (dx == 0 && dy == 0)) {
         throw std::invalid_argument("Sobel dx/dy must request at least one derivative");
@@ -313,6 +441,234 @@ cv::Mat laplacianEdge(const cv::Mat &src, int kernelSize) {
     cv::Mat lap16, dst;
     cv::Laplacian(toGray(src), lap16, CV_16S, kernelSize);
     cv::convertScaleAbs(lap16, dst);
+    return dst;
+}
+
+cv::Mat gradientMagnitude(const cv::Mat &src, int kernelSize, bool useScharr) {
+    const cv::Mat gray = toGray(src);
+    cv::Mat gx, gy, magnitude, dst;
+    if (useScharr) {
+        cv::Scharr(gray, gx, CV_32F, 1, 0);
+        cv::Scharr(gray, gy, CV_32F, 0, 1);
+    } else {
+        kernelSize = oddKernel(kernelSize, "kernelSize");
+        cv::Sobel(gray, gx, CV_32F, 1, 0, kernelSize);
+        cv::Sobel(gray, gy, CV_32F, 0, 1, kernelSize);
+    }
+    cv::magnitude(gx, gy, magnitude);
+    cv::normalize(magnitude, dst, 0, 255, cv::NORM_MINMAX);
+    dst.convertTo(dst, CV_8U);
+    return dst;
+}
+
+cv::Mat contoursImage(const cv::Mat &src, double thresholdValue, bool useOtsu,
+                      int thickness) {
+    if (thickness <= 0) {
+        throw std::invalid_argument("thickness must be positive");
+    }
+    cv::Mat mask = binaryMask(src, thresholdValue, useOtsu);
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    cv::Mat dst = ensureBgr(src);
+    cv::drawContours(dst, contours, -1, cv::Scalar(0, 255, 0), thickness, cv::LINE_AA);
+    return dst;
+}
+
+cv::Mat connectedComponentsImage(const cv::Mat &src, int minArea) {
+    if (minArea < 0) {
+        throw std::invalid_argument("minArea must be non-negative");
+    }
+    cv::Mat mask = binaryMask(src, 0.0, true);
+    cv::Mat labels, stats, centroids;
+    const int count = cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8,
+                                                       CV_32S);
+    cv::Mat dst(src.size(), CV_8UC3, cv::Scalar(0, 0, 0));
+    for (int label = 1; label < count; ++label) {
+        const int area = stats.at<int>(label, cv::CC_STAT_AREA);
+        if (area < minArea) {
+            continue;
+        }
+        dst.setTo(labelColor(label), labels == label);
+    }
+    return dst;
+}
+
+cv::Mat distanceTransformImage(const cv::Mat &src) {
+    cv::Mat mask = binaryMask(src, 0.0, true);
+    cv::Mat distance;
+    cv::distanceTransform(mask, distance, cv::DIST_L2, 5);
+    return normalizeToByte(distance);
+}
+
+cv::Mat watershedSegmentation(const cv::Mat &src) {
+    cv::Mat bgr = ensureBgr(src);
+    cv::Mat gray = toGray(bgr);
+    cv::Mat binary;
+    cv::threshold(gray, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+    cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 2);
+
+    cv::Mat sureBackground;
+    cv::dilate(binary, sureBackground, kernel, cv::Point(-1, -1), 3);
+
+    cv::Mat distance;
+    cv::distanceTransform(binary, distance, cv::DIST_L2, 5);
+    cv::normalize(distance, distance, 0, 1.0, cv::NORM_MINMAX);
+
+    cv::Mat sureForeground;
+    cv::threshold(distance, sureForeground, 0.4, 1.0, cv::THRESH_BINARY);
+    sureForeground.convertTo(sureForeground, CV_8U, 255);
+
+    cv::Mat markers;
+    cv::connectedComponents(sureForeground, markers);
+    markers += 1;
+    markers.setTo(0, sureBackground - sureForeground);
+    cv::watershed(bgr, markers);
+
+    cv::Mat dst(src.size(), CV_8UC3, cv::Scalar(0, 0, 0));
+    for (int row = 0; row < markers.rows; ++row) {
+        const int *markerRow = markers.ptr<int>(row);
+        cv::Vec3b *dstRow = dst.ptr<cv::Vec3b>(row);
+        for (int col = 0; col < markers.cols; ++col) {
+            const int label = markerRow[col];
+            if (label == -1) {
+                dstRow[col] = cv::Vec3b(0, 0, 255);
+            } else if (label <= 1) {
+                dstRow[col] = cv::Vec3b(0, 0, 0);
+            } else {
+                const cv::Scalar color = labelColor(label);
+                dstRow[col] = cv::Vec3b(static_cast<uchar>(color[0]),
+                                        static_cast<uchar>(color[1]),
+                                        static_cast<uchar>(color[2]));
+            }
+        }
+    }
+    return dst;
+}
+
+cv::Mat houghLinesImage(const cv::Mat &src, double rho, double theta, int threshold,
+                        double minLineLength, double maxLineGap) {
+    cv::Mat edges = autoCannyEdge(src);
+    std::vector<cv::Vec4i> lines;
+    cv::HoughLinesP(edges, lines, rho, theta, threshold, minLineLength, maxLineGap);
+    cv::Mat dst = ensureBgr(src);
+    for (const cv::Vec4i &line : lines) {
+        cv::line(dst, cv::Point(line[0], line[1]), cv::Point(line[2], line[3]),
+                 cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+    }
+    return dst;
+}
+
+cv::Mat houghCirclesImage(const cv::Mat &src, double dp, double minDist, double param1,
+                          double param2, int minRadius, int maxRadius) {
+    cv::Mat gray = toGray(src);
+    cv::medianBlur(gray, gray, 5);
+    std::vector<cv::Vec3f> circles;
+    cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, dp, minDist, param1, param2,
+                     minRadius, maxRadius);
+    cv::Mat dst = ensureBgr(src);
+    for (const cv::Vec3f &circle : circles) {
+        const cv::Point center(cvRound(circle[0]), cvRound(circle[1]));
+        const int radius = cvRound(circle[2]);
+        cv::circle(dst, center, radius, cv::Scalar(0, 255, 0), 2, cv::LINE_AA);
+        cv::circle(dst, center, 2, cv::Scalar(0, 0, 255), 3, cv::LINE_AA);
+    }
+    return dst;
+}
+
+cv::Mat templateMatchImage(const cv::Mat &src, const cv::Mat &templ, int method) {
+    requireImage(src);
+    requireImage(templ, "template");
+    if (templ.cols > src.cols || templ.rows > src.rows) {
+        throw std::invalid_argument("template must not be larger than source image");
+    }
+    cv::Mat matchSrc = src;
+    cv::Mat matchTempl = templ;
+    if (src.type() != templ.type()) {
+        matchSrc = toGray(src);
+        matchTempl = toGray(templ);
+    }
+    cv::Mat result;
+    cv::matchTemplate(matchSrc, matchTempl, result, method);
+    double minVal, maxVal;
+    cv::Point minLoc, maxLoc;
+    cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+    const cv::Point matchLoc = (method == cv::TM_SQDIFF || method == cv::TM_SQDIFF_NORMED)
+                                       ? minLoc
+                                       : maxLoc;
+    cv::Mat dst = ensureBgr(src);
+    cv::rectangle(dst, cv::Rect(matchLoc.x, matchLoc.y, templ.cols, templ.rows),
+                  cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+    return dst;
+}
+
+cv::Mat drawOrbKeypoints(const cv::Mat &src, int maxFeatures) {
+    requireImage(src);
+    if (maxFeatures <= 0) {
+        throw std::invalid_argument("maxFeatures must be positive");
+    }
+    cv::Ptr<cv::ORB> orb = cv::ORB::create(maxFeatures);
+    std::vector<cv::KeyPoint> keypoints;
+    cv::Mat descriptors;
+    orb->detectAndCompute(toGray(src), cv::noArray(), keypoints, descriptors);
+    cv::Mat dst;
+    cv::drawKeypoints(src, keypoints, dst, cv::Scalar(0, 255, 0),
+                      cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+    return dst;
+}
+
+cv::Mat inpaintImage(const cv::Mat &src, const cv::Mat &mask, double radius) {
+    requireImage(src);
+    requireImage(mask, "mask");
+    if (radius <= 0.0) {
+        throw std::invalid_argument("radius must be positive");
+    }
+    cv::Mat binary = toGray(mask);
+    cv::threshold(binary, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    cv::Mat dst;
+    cv::inpaint(src, binary, dst, radius, cv::INPAINT_TELEA);
+    return dst;
+}
+
+cv::Mat pyramidDown(const cv::Mat &src, int levels) {
+    requireImage(src);
+    if (levels <= 0) {
+        throw std::invalid_argument("levels must be positive");
+    }
+    cv::Mat dst = src.clone();
+    for (int i = 0; i < levels; ++i) {
+        cv::pyrDown(dst, dst);
+    }
+    return dst;
+}
+
+cv::Mat pyramidUp(const cv::Mat &src, int levels) {
+    requireImage(src);
+    if (levels <= 0) {
+        throw std::invalid_argument("levels must be positive");
+    }
+    cv::Mat dst = src.clone();
+    for (int i = 0; i < levels; ++i) {
+        cv::pyrUp(dst, dst);
+    }
+    return dst;
+}
+
+cv::Mat affineTransform(const cv::Mat &src, double a00, double a01, double a02,
+                        double a10, double a11, double a12,
+                        int outputWidth, int outputHeight) {
+    requireImage(src);
+    if (outputWidth <= 0) {
+        outputWidth = src.cols;
+    }
+    if (outputHeight <= 0) {
+        outputHeight = src.rows;
+    }
+    cv::Mat matrix = (cv::Mat_<double>(2, 3) << a00, a01, a02, a10, a11, a12);
+    cv::Mat dst;
+    cv::warpAffine(src, dst, matrix, cv::Size(outputWidth, outputHeight),
+                   cv::INTER_LINEAR, cv::BORDER_REFLECT101);
     return dst;
 }
 
@@ -467,6 +823,22 @@ int parseColorConversion(const std::string &name) {
     const auto it = codes.find(normalizeName(name));
     if (it == codes.end()) {
         throw std::invalid_argument("Unknown color conversion: " + name);
+    }
+    return it->second;
+}
+
+int parseTemplateMatchMethod(const std::string &name) {
+    static const std::map<std::string, int> methods = {
+            {"sqdiff", cv::TM_SQDIFF},
+            {"sqdiff_normed", cv::TM_SQDIFF_NORMED},
+            {"ccorr", cv::TM_CCORR},
+            {"ccorr_normed", cv::TM_CCORR_NORMED},
+            {"ccoeff", cv::TM_CCOEFF},
+            {"ccoeff_normed", cv::TM_CCOEFF_NORMED},
+    };
+    const auto it = methods.find(normalizeName(name));
+    if (it == methods.end()) {
+        throw std::invalid_argument("Unknown template match method: " + name);
     }
     return it->second;
 }

@@ -26,8 +26,10 @@ void printUsage() {
             << "  flip code=-1|0|1\n"
             << "  histogram [width=512 height=300]\n"
             << "  equalize\n"
+            << "  clahe [clip=2.0 tile=8]\n"
             << "  brightness [alpha=1.0 beta=0]\n"
             << "  gamma gamma=<value>\n"
+            << "  white_balance\n"
             << "  threshold value=<gray> [max=255]\n"
             << "  otsu\n"
             << "  adaptive [block=11 c=2 gaussian=true]\n"
@@ -35,10 +37,25 @@ void printUsage() {
             << "  gaussian_blur [ksize=5 sigma=0]\n"
             << "  median [ksize=3]\n"
             << "  bilateral [diameter=9 sigma_color=75 sigma_space=75]\n"
+            << "  nlm_denoise [h=10 template=7 search=21]\n"
             << "  morphology type=erode|dilate|open|close|gradient|tophat|blackhat [ksize=3 iterations=1]\n"
             << "  canny [low=80 high=160 aperture=3]\n"
+            << "  auto_canny [sigma=0.33 aperture=3]\n"
             << "  sobel [dx=1 dy=0 ksize=3]\n"
             << "  laplacian [ksize=3]\n"
+            << "  gradient [ksize=3 scharr=false]\n"
+            << "  contours [value=0 otsu=true thickness=2]\n"
+            << "  components [min_area=0]\n"
+            << "  distance_transform\n"
+            << "  watershed\n"
+            << "  hough_lines [rho=1 theta=0.0174533 threshold=80 min_length=30 max_gap=10]\n"
+            << "  hough_circles [dp=1.2 min_dist=40 param1=100 param2=30 min_radius=0 max_radius=0]\n"
+            << "  template_match template=<path> [method=ccoeff_normed]\n"
+            << "  orb [features=500]\n"
+            << "  inpaint mask=<path> [radius=3]\n"
+            << "  pyrdown [levels=1]\n"
+            << "  pyrup [levels=1]\n"
+            << "  affine a00=<v> a01=<v> a02=<v> a10=<v> a11=<v> a12=<v> [width=0 height=0]\n"
             << "  sharpen\n"
             << "  unsharp [amount=1.0 ksize=5 sigma=1]\n"
             << "  salt_pepper [amount=0.01 seed=0]\n"
@@ -92,6 +109,31 @@ int requireInt(const Options &options, const std::string &key) {
     return std::stoi(it->second);
 }
 
+double requireDouble(const Options &options, const std::string &key) {
+    const auto it = options.find(key);
+    if (it == options.end()) {
+        throw std::invalid_argument("Missing required option: " + key);
+    }
+    return std::stod(it->second);
+}
+
+std::string requireString(const Options &options, const std::string &key) {
+    const auto it = options.find(key);
+    if (it == options.end() || it->second.empty()) {
+        throw std::invalid_argument("Missing required option: " + key);
+    }
+    return it->second;
+}
+
+cv::Mat loadOptionImage(const Options &options, const std::string &key) {
+    const std::string path = requireString(options, key);
+    cv::Mat image = cv::imread(path, cv::IMREAD_UNCHANGED);
+    if (image.empty()) {
+        throw std::runtime_error("Cannot read " + key + " image: " + path);
+    }
+    return image;
+}
+
 std::string normalizeOp(std::string op) {
     for (char &ch : op) {
         if (ch == '-') {
@@ -135,12 +177,19 @@ cv::Mat runOperation(const cv::Mat &image, const std::string &operation,
     if (op == "equalize") {
         return imgproc::equalizeHistogram(image);
     }
+    if (op == "clahe") {
+        return imgproc::claheEqualize(image, getDouble(options, "clip", 2.0),
+                                      getInt(options, "tile", 8));
+    }
     if (op == "brightness" || op == "contrast") {
         return imgproc::adjustBrightnessContrast(image, getDouble(options, "alpha", 1.0),
                                                  getDouble(options, "beta", 0.0));
     }
     if (op == "gamma") {
         return imgproc::gammaCorrection(image, getDouble(options, "gamma", 1.0));
+    }
+    if (op == "white_balance" || op == "gray_world") {
+        return imgproc::grayWorldWhiteBalance(image);
     }
     if (op == "threshold") {
         return imgproc::thresholdBinary(image, getDouble(options, "value", 128.0),
@@ -169,6 +218,11 @@ cv::Mat runOperation(const cv::Mat &image, const std::string &operation,
                                              getDouble(options, "sigma_color", 75.0),
                                              getDouble(options, "sigma_space", 75.0));
     }
+    if (op == "nlm_denoise" || op == "denoise") {
+        return imgproc::denoiseNlMeans(image, static_cast<float>(getDouble(options, "h", 10.0)),
+                                       getInt(options, "template", 7),
+                                       getInt(options, "search", 21));
+    }
     if (op == "morph" || op == "morphology") {
         return imgproc::morphologyImage(image,
                                         imgproc::parseMorphType(getString(options, "type", "open")),
@@ -180,6 +234,10 @@ cv::Mat runOperation(const cv::Mat &image, const std::string &operation,
                                   getDouble(options, "high", 160.0),
                                   getInt(options, "aperture", 3));
     }
+    if (op == "auto_canny") {
+        return imgproc::autoCannyEdge(image, getDouble(options, "sigma", 0.33),
+                                      getInt(options, "aperture", 3));
+    }
     if (op == "sobel") {
         return imgproc::sobelEdge(image, getInt(options, "dx", 1),
                                   getInt(options, "dy", 0),
@@ -187,6 +245,69 @@ cv::Mat runOperation(const cv::Mat &image, const std::string &operation,
     }
     if (op == "laplacian") {
         return imgproc::laplacianEdge(image, getInt(options, "ksize", 3));
+    }
+    if (op == "gradient") {
+        return imgproc::gradientMagnitude(image, getInt(options, "ksize", 3),
+                                          getBool(options, "scharr", false));
+    }
+    if (op == "contours") {
+        return imgproc::contoursImage(image, getDouble(options, "value", 0.0),
+                                      getBool(options, "otsu", true),
+                                      getInt(options, "thickness", 2));
+    }
+    if (op == "components" || op == "connected_components") {
+        return imgproc::connectedComponentsImage(image, getInt(options, "min_area", 0));
+    }
+    if (op == "distance_transform") {
+        return imgproc::distanceTransformImage(image);
+    }
+    if (op == "watershed") {
+        return imgproc::watershedSegmentation(image);
+    }
+    if (op == "hough_lines") {
+        return imgproc::houghLinesImage(image, getDouble(options, "rho", 1.0),
+                                        getDouble(options, "theta", CV_PI / 180.0),
+                                        getInt(options, "threshold", 80),
+                                        getDouble(options, "min_length", 30.0),
+                                        getDouble(options, "max_gap", 10.0));
+    }
+    if (op == "hough_circles") {
+        return imgproc::houghCirclesImage(image, getDouble(options, "dp", 1.2),
+                                          getDouble(options, "min_dist", 40.0),
+                                          getDouble(options, "param1", 100.0),
+                                          getDouble(options, "param2", 30.0),
+                                          getInt(options, "min_radius", 0),
+                                          getInt(options, "max_radius", 0));
+    }
+    if (op == "template_match") {
+        return imgproc::templateMatchImage(
+                image,
+                loadOptionImage(options, "template"),
+                imgproc::parseTemplateMatchMethod(getString(options, "method", "ccoeff_normed")));
+    }
+    if (op == "orb") {
+        return imgproc::drawOrbKeypoints(image, getInt(options, "features", 500));
+    }
+    if (op == "inpaint") {
+        return imgproc::inpaintImage(image, loadOptionImage(options, "mask"),
+                                     getDouble(options, "radius", 3.0));
+    }
+    if (op == "pyrdown") {
+        return imgproc::pyramidDown(image, getInt(options, "levels", 1));
+    }
+    if (op == "pyrup") {
+        return imgproc::pyramidUp(image, getInt(options, "levels", 1));
+    }
+    if (op == "affine") {
+        return imgproc::affineTransform(image,
+                                        requireDouble(options, "a00"),
+                                        requireDouble(options, "a01"),
+                                        requireDouble(options, "a02"),
+                                        requireDouble(options, "a10"),
+                                        requireDouble(options, "a11"),
+                                        requireDouble(options, "a12"),
+                                        getInt(options, "width", 0),
+                                        getInt(options, "height", 0));
     }
     if (op == "sharpen") {
         return imgproc::sharpen(image);
