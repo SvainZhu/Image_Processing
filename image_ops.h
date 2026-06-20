@@ -3,7 +3,9 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <map>
 #include <string>
+#include <vector>
 
 namespace imgproc {
 
@@ -30,6 +32,15 @@ cv::Mat claheEqualize(const cv::Mat &src, double clipLimit = 2.0, int tileGridSi
 cv::Mat adjustBrightnessContrast(const cv::Mat &src, double alpha, double beta);
 cv::Mat gammaCorrection(const cv::Mat &src, double gamma);
 cv::Mat grayWorldWhiteBalance(const cv::Mat &src);
+cv::Mat adjustSaturation(const cv::Mat &src, double factor = 1.0);
+cv::Mat adjustVibrance(const cv::Mat &src, double amount = 0.25);
+cv::Mat adjustTemperatureTint(const cv::Mat &src, double temperature = 0.0,
+                              double tint = 0.0);
+cv::Mat applyToneCurve(const cv::Mat &src, const std::vector<cv::Point2f> &points,
+                       const std::string &channel = "all");
+cv::Mat applyPresetFilter(const cv::Mat &src, const std::string &preset,
+                          double intensity = 1.0);
+cv::Mat autoEnhance(const cv::Mat &src, double strength = 1.0);
 
 cv::Mat thresholdBinary(const cv::Mat &src, double thresholdValue, double maxValue = 255.0);
 cv::Mat thresholdOtsu(const cv::Mat &src);
@@ -85,11 +96,13 @@ cv::Mat addGaussianNoise(const cv::Mat &src, double mean = 0.0, double stddev = 
 cv::Mat convertColor(const cv::Mat &src, int code);
 cv::Mat applyColorMapImage(const cv::Mat &src, int colorMap);
 cv::Mat normalizeToByte(const cv::Mat &src);
+std::map<std::string, std::string> readImageMetadata(const std::string &path);
 
 MorphType parseMorphType(const std::string &name);
 int parseColorMap(const std::string &name);
 int parseColorConversion(const std::string &name);
 int parseTemplateMatchMethod(const std::string &name);
+std::vector<std::string> availablePresetFilters();
 
 }  // namespace imgproc
 

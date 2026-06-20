@@ -3,9 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <fstream>
+#include <iomanip>
+#include <limits>
 #include <map>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -114,6 +118,400 @@ double grayMedian(const cv::Mat &gray) {
     }
     return 0.0;
 }
+
+double clampDouble(double value, double low, double high) {
+    return std::max(low, std::min(high, value));
+}
+
+int clampByte(double value) {
+    return static_cast<int>(clampDouble(std::round(value), 0.0, 255.0));
+}
+
+cv::Mat blendImages(const cv::Mat &base, const cv::Mat &adjusted, double intensity) {
+    intensity = clampDouble(intensity, 0.0, 1.0);
+    if (intensity >= 1.0) {
+        return adjusted.clone();
+    }
+    if (intensity <= 0.0) {
+        return base.clone();
+    }
+    cv::Mat dst;
+    cv::addWeighted(base, 1.0 - intensity, adjusted, intensity, 0.0, dst);
+    return dst;
+}
+
+double bytePercentile(const cv::Mat &gray, double percentile) {
+    int histSize = 256;
+    const float range[] = {0.0F, 256.0F};
+    const float *histRange = range;
+    cv::Mat hist;
+    cv::calcHist(&gray, 1, nullptr, cv::Mat(), hist, 1, &histSize, &histRange);
+
+    const int total = gray.rows * gray.cols;
+    const int target = std::max(1, static_cast<int>(std::ceil(total * percentile)));
+    int cumulative = 0;
+    for (int i = 0; i < histSize; ++i) {
+        cumulative += cvRound(hist.at<float>(i));
+        if (cumulative >= target) {
+            return i;
+        }
+    }
+    return 255.0;
+}
+
+cv::Mat autoLevelsLab(const cv::Mat &src, double lowPercentile = 0.005,
+                      double highPercentile = 0.995) {
+    cv::Mat lab;
+    cv::cvtColor(ensureBgr(src), lab, cv::COLOR_BGR2Lab);
+    std::vector<cv::Mat> channels;
+    cv::split(lab, channels);
+
+    const double low = bytePercentile(channels[0], lowPercentile);
+    const double high = bytePercentile(channels[0], highPercentile);
+    if (high - low < 8.0) {
+        return ensureBgr(src);
+    }
+
+    cv::Mat lut(1, 256, CV_8U);
+    const double scale = 255.0 / (high - low);
+    for (int i = 0; i < 256; ++i) {
+        lut.at<uchar>(0, i) = cv::saturate_cast<uchar>((i - low) * scale);
+    }
+    cv::LUT(channels[0], lut, channels[0]);
+    cv::merge(channels, lab);
+
+    cv::Mat dst;
+    cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+    return dst;
+}
+
+cv::Mat buildCurveLut(std::vector<cv::Point2f> points) {
+    if (points.size() < 2) {
+        throw std::invalid_argument("tone curve needs at least two points");
+    }
+
+    for (cv::Point2f &point : points) {
+        if (!std::isfinite(point.x) || !std::isfinite(point.y)) {
+            throw std::invalid_argument("tone curve points must be finite");
+        }
+        point.x = static_cast<float>(clampDouble(point.x, 0.0, 255.0));
+        point.y = static_cast<float>(clampDouble(point.y, 0.0, 255.0));
+    }
+    std::sort(points.begin(), points.end(), [](const cv::Point2f &lhs,
+                                               const cv::Point2f &rhs) {
+        return lhs.x < rhs.x;
+    });
+
+    std::vector<cv::Point2f> uniquePoints;
+    uniquePoints.reserve(points.size() + 2);
+    for (const cv::Point2f &point : points) {
+        if (!uniquePoints.empty() && std::abs(uniquePoints.back().x - point.x) < 0.001F) {
+            uniquePoints.back().y = point.y;
+        } else {
+            uniquePoints.push_back(point);
+        }
+    }
+    if (uniquePoints.size() < 2) {
+        throw std::invalid_argument("tone curve x values must contain at least two positions");
+    }
+    if (uniquePoints.front().x > 0.0F) {
+        uniquePoints.insert(uniquePoints.begin(), cv::Point2f(0.0F, uniquePoints.front().y));
+    }
+    if (uniquePoints.back().x < 255.0F) {
+        uniquePoints.push_back(cv::Point2f(255.0F, uniquePoints.back().y));
+    }
+
+    cv::Mat lut(1, 256, CV_8U);
+    std::size_t segment = 0;
+    for (int x = 0; x < 256; ++x) {
+        while (segment + 1 < uniquePoints.size() &&
+               x > uniquePoints[segment + 1].x) {
+            ++segment;
+        }
+        const cv::Point2f &p0 = uniquePoints[segment];
+        const cv::Point2f &p1 = uniquePoints[std::min(segment + 1, uniquePoints.size() - 1)];
+        const double span = std::max(1.0F, p1.x - p0.x);
+        const double t = clampDouble((x - p0.x) / span, 0.0, 1.0);
+        lut.at<uchar>(0, x) = static_cast<uchar>(clampByte(p0.y + (p1.y - p0.y) * t));
+    }
+    return lut;
+}
+
+std::vector<unsigned char> readFileBytes(const std::string &path) {
+    std::ifstream input(path.c_str(), std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("Cannot open metadata file: " + path);
+    }
+    input.seekg(0, std::ios::end);
+    const std::streamoff size = input.tellg();
+    input.seekg(0, std::ios::beg);
+    if (size <= 0) {
+        return std::vector<unsigned char>();
+    }
+    std::vector<unsigned char> bytes(static_cast<std::size_t>(size));
+    input.read(reinterpret_cast<char *>(bytes.data()), size);
+    return bytes;
+}
+
+bool hasBytes(const std::vector<unsigned char> &data, std::size_t pos, std::size_t count) {
+    return pos <= data.size() && count <= data.size() - pos;
+}
+
+uint16_t readBe16(const std::vector<unsigned char> &data, std::size_t pos) {
+    if (!hasBytes(data, pos, 2)) {
+        return 0;
+    }
+    return static_cast<uint16_t>((data[pos] << 8) | data[pos + 1]);
+}
+
+class ExifReader {
+public:
+    ExifReader(const std::vector<unsigned char> &bytes, std::size_t tiffStart, bool littleEndian)
+            : data(bytes), tiff(tiffStart), little(littleEndian) {}
+
+    void parseIfd(uint32_t offset, bool exifIfd, std::map<std::string, std::string> &metadata) const {
+        const std::size_t ifd = tiff + offset;
+        if (!hasBytes(data, ifd, 2)) {
+            return;
+        }
+        const uint16_t count = read16(ifd);
+        for (uint16_t i = 0; i < count; ++i) {
+            const std::size_t entry = ifd + 2 + static_cast<std::size_t>(i) * 12;
+            if (!hasBytes(data, entry, 12)) {
+                break;
+            }
+
+            const uint16_t tag = read16(entry);
+            const uint16_t type = read16(entry + 2);
+            const uint32_t valueCount = read32(entry + 4);
+            const std::size_t value = valuePosition(entry, type, valueCount);
+            if (value == std::numeric_limits<std::size_t>::max()) {
+                continue;
+            }
+
+            if (!exifIfd && tag == 0x8769) {
+                parseIfd(readFirstUnsigned(type, value), true, metadata);
+                continue;
+            }
+            addKnownTag(tag, type, valueCount, value, exifIfd, metadata);
+        }
+    }
+
+private:
+    const std::vector<unsigned char> &data;
+    std::size_t tiff;
+    bool little;
+
+    uint16_t read16(std::size_t pos) const {
+        if (!hasBytes(data, pos, 2)) {
+            return 0;
+        }
+        if (little) {
+            return static_cast<uint16_t>(data[pos] | (data[pos + 1] << 8));
+        }
+        return static_cast<uint16_t>((data[pos] << 8) | data[pos + 1]);
+    }
+
+    int32_t readS32(std::size_t pos) const {
+        return static_cast<int32_t>(read32(pos));
+    }
+
+    uint32_t read32(std::size_t pos) const {
+        if (!hasBytes(data, pos, 4)) {
+            return 0;
+        }
+        if (little) {
+            return static_cast<uint32_t>(data[pos]) |
+                   (static_cast<uint32_t>(data[pos + 1]) << 8) |
+                   (static_cast<uint32_t>(data[pos + 2]) << 16) |
+                   (static_cast<uint32_t>(data[pos + 3]) << 24);
+        }
+        return (static_cast<uint32_t>(data[pos]) << 24) |
+               (static_cast<uint32_t>(data[pos + 1]) << 16) |
+               (static_cast<uint32_t>(data[pos + 2]) << 8) |
+               static_cast<uint32_t>(data[pos + 3]);
+    }
+
+    std::size_t typeSize(uint16_t type) const {
+        switch (type) {
+            case 1:
+            case 2:
+            case 6:
+            case 7:
+                return 1;
+            case 3:
+            case 8:
+                return 2;
+            case 4:
+            case 9:
+            case 11:
+                return 4;
+            case 5:
+            case 10:
+            case 12:
+                return 8;
+            default:
+                return 0;
+        }
+    }
+
+    std::size_t valuePosition(std::size_t entry, uint16_t type, uint32_t count) const {
+        const std::size_t itemSize = typeSize(type);
+        if (itemSize == 0 || count == 0 ||
+            count > std::numeric_limits<std::size_t>::max() / itemSize) {
+            return std::numeric_limits<std::size_t>::max();
+        }
+        const std::size_t totalSize = itemSize * count;
+        if (totalSize <= 4) {
+            return entry + 8;
+        }
+        const uint32_t offset = read32(entry + 8);
+        const std::size_t pos = tiff + offset;
+        if (!hasBytes(data, pos, totalSize)) {
+            return std::numeric_limits<std::size_t>::max();
+        }
+        return pos;
+    }
+
+    std::string readAscii(std::size_t pos, uint32_t count) const {
+        if (!hasBytes(data, pos, count)) {
+            return std::string();
+        }
+        std::string value(reinterpret_cast<const char *>(&data[pos]),
+                          reinterpret_cast<const char *>(&data[pos + count]));
+        while (!value.empty() && (value.back() == '\0' || std::isspace(static_cast<unsigned char>(value.back())))) {
+            value.pop_back();
+        }
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+            value.erase(value.begin());
+        }
+        return value;
+    }
+
+    uint32_t readFirstUnsigned(uint16_t type, std::size_t pos) const {
+        if (type == 3) {
+            return read16(pos);
+        }
+        if (type == 4) {
+            return read32(pos);
+        }
+        if (type == 1 && hasBytes(data, pos, 1)) {
+            return data[pos];
+        }
+        return 0;
+    }
+
+    double readRational(uint16_t type, std::size_t pos) const {
+        if (type == 5) {
+            const uint32_t numerator = read32(pos);
+            const uint32_t denominator = read32(pos + 4);
+            return denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
+        }
+        if (type == 10) {
+            const int32_t numerator = readS32(pos);
+            const int32_t denominator = readS32(pos + 4);
+            return denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
+        }
+        return static_cast<double>(readFirstUnsigned(type, pos));
+    }
+
+    std::string formatDouble(double value, int precision = 2) const {
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(precision) << value;
+        std::string text = out.str();
+        while (text.size() > 1 && text.back() == '0') {
+            text.pop_back();
+        }
+        if (!text.empty() && text.back() == '.') {
+            text.pop_back();
+        }
+        return text;
+    }
+
+    std::string formatExposure(double seconds) const {
+        if (seconds > 0.0 && seconds < 1.0) {
+            const int denominator = static_cast<int>(std::round(1.0 / seconds));
+            if (denominator > 0) {
+                return "1/" + std::to_string(denominator);
+            }
+        }
+        return formatDouble(seconds, 4);
+    }
+
+    void setIfPresent(std::map<std::string, std::string> &metadata,
+                      const std::string &key, const std::string &value) const {
+        if (!value.empty()) {
+            metadata[key] = value;
+        }
+    }
+
+    void addKnownTag(uint16_t tag, uint16_t type, uint32_t count, std::size_t value,
+                     bool exifIfd, std::map<std::string, std::string> &metadata) const {
+        if (!exifIfd) {
+            switch (tag) {
+                case 0x010F:
+                    setIfPresent(metadata, "make", readAscii(value, count));
+                    break;
+                case 0x0110:
+                    setIfPresent(metadata, "model", readAscii(value, count));
+                    break;
+                case 0x0112:
+                    metadata["orientation"] = std::to_string(readFirstUnsigned(type, value));
+                    break;
+                case 0x0131:
+                    setIfPresent(metadata, "software", readAscii(value, count));
+                    break;
+                case 0x0132:
+                    setIfPresent(metadata, "datetime", readAscii(value, count));
+                    break;
+                default:
+                    break;
+            }
+            return;
+        }
+
+        switch (tag) {
+            case 0x829A:
+                metadata["exposure_time_s"] = formatExposure(readRational(type, value));
+                break;
+            case 0x829D:
+                metadata["aperture"] = "f/" + formatDouble(readRational(type, value), 2);
+                break;
+            case 0x8827:
+                metadata["iso"] = std::to_string(readFirstUnsigned(type, value));
+                break;
+            case 0x9003:
+                setIfPresent(metadata, "datetime_original", readAscii(value, count));
+                break;
+            case 0x9204:
+                metadata["exposure_bias_ev"] = formatDouble(readRational(type, value), 2);
+                break;
+            case 0x9209:
+                metadata["flash"] = std::to_string(readFirstUnsigned(type, value));
+                break;
+            case 0x920A:
+                metadata["focal_length_mm"] = formatDouble(readRational(type, value), 2);
+                break;
+            case 0xA002:
+                metadata["pixel_width"] = std::to_string(readFirstUnsigned(type, value));
+                break;
+            case 0xA003:
+                metadata["pixel_height"] = std::to_string(readFirstUnsigned(type, value));
+                break;
+            case 0xA403:
+                metadata["white_balance"] = readFirstUnsigned(type, value) == 0 ? "auto" : "manual";
+                break;
+            case 0xA405:
+                metadata["focal_length_35mm"] = std::to_string(readFirstUnsigned(type, value));
+                break;
+            case 0xA434:
+                setIfPresent(metadata, "lens_model", readAscii(value, count));
+                break;
+            default:
+                break;
+        }
+    }
+};
 
 }  // namespace
 
@@ -312,6 +710,224 @@ cv::Mat grayWorldWhiteBalance(const cv::Mat &src) {
     cv::Mat dst;
     cv::merge(channels, dst);
     return dst;
+}
+
+cv::Mat adjustSaturation(const cv::Mat &src, double factor) {
+    requireImage(src);
+    if (factor < 0.0) {
+        throw std::invalid_argument("saturation factor must be non-negative");
+    }
+    if (src.channels() == 1) {
+        return src.clone();
+    }
+
+    cv::Mat hsv;
+    cv::cvtColor(ensureBgr(src), hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> channels;
+    cv::split(hsv, channels);
+    channels[1].convertTo(channels[1], channels[1].type(), factor, 0.0);
+    cv::merge(channels, hsv);
+
+    cv::Mat dst;
+    cv::cvtColor(hsv, dst, cv::COLOR_HSV2BGR);
+    return dst;
+}
+
+cv::Mat adjustVibrance(const cv::Mat &src, double amount) {
+    requireImage(src);
+    if (amount < -1.0 || amount > 1.0) {
+        throw std::invalid_argument("vibrance amount must be in [-1, 1]");
+    }
+    if (src.channels() == 1 || amount == 0.0) {
+        return src.clone();
+    }
+
+    cv::Mat hsv;
+    cv::cvtColor(ensureBgr(src), hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> channels;
+    cv::split(hsv, channels);
+
+    cv::Mat saturation32;
+    channels[1].convertTo(saturation32, CV_32F);
+    if (amount > 0.0) {
+        cv::Mat saturationNorm = saturation32 / 255.0;
+        cv::Mat lift = 255.0 - saturation32;
+        cv::Mat protection = 1.0 - saturationNorm;
+        saturation32 = saturation32 + lift.mul(protection) * amount;
+    } else {
+        saturation32 = saturation32 * (1.0 + amount);
+    }
+    saturation32.convertTo(channels[1], CV_8U);
+    cv::merge(channels, hsv);
+
+    cv::Mat dst;
+    cv::cvtColor(hsv, dst, cv::COLOR_HSV2BGR);
+    return dst;
+}
+
+cv::Mat adjustTemperatureTint(const cv::Mat &src, double temperature, double tint) {
+    requireImage(src);
+    if (temperature < -1.0 || temperature > 1.0 || tint < -1.0 || tint > 1.0) {
+        throw std::invalid_argument("temperature and tint must be in [-1, 1]");
+    }
+    if (src.channels() == 1) {
+        return src.clone();
+    }
+
+    cv::Mat lab;
+    cv::cvtColor(ensureBgr(src), lab, cv::COLOR_BGR2Lab);
+    std::vector<cv::Mat> channels;
+    cv::split(lab, channels);
+    channels[1].convertTo(channels[1], channels[1].type(), 1.0, tint * 32.0);
+    channels[2].convertTo(channels[2], channels[2].type(), 1.0, temperature * 32.0);
+    cv::merge(channels, lab);
+
+    cv::Mat dst;
+    cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+    return dst;
+}
+
+cv::Mat applyToneCurve(const cv::Mat &src, const std::vector<cv::Point2f> &points,
+                       const std::string &channel) {
+    requireImage(src);
+    const cv::Mat lut = buildCurveLut(points);
+    const std::string key = normalizeName(channel);
+    if (key == "all" || key == "rgb" || src.channels() == 1) {
+        cv::Mat dst;
+        cv::LUT(src, lut, dst);
+        return dst;
+    }
+
+    cv::Mat bgr = ensureBgr(src);
+    std::vector<cv::Mat> channels;
+    cv::split(bgr, channels);
+    int index = -1;
+    if (key == "b" || key == "blue") {
+        index = 0;
+    } else if (key == "g" || key == "green") {
+        index = 1;
+    } else if (key == "r" || key == "red") {
+        index = 2;
+    } else {
+        throw std::invalid_argument("curve channel must be all, r, g, or b");
+    }
+    cv::LUT(channels[index], lut, channels[index]);
+    cv::Mat dst;
+    cv::merge(channels, dst);
+    return dst;
+}
+
+cv::Mat applyPresetFilter(const cv::Mat &src, const std::string &preset,
+                          double intensity) {
+    requireImage(src);
+    if (intensity < 0.0 || intensity > 1.0) {
+        throw std::invalid_argument("filter intensity must be in [0, 1]");
+    }
+
+    const std::string key = normalizeName(preset);
+    const cv::Mat base = ensureBgr(src);
+    cv::Mat work = base.clone();
+
+    if (key == "vivid") {
+        work = applyToneCurve(work, {cv::Point2f(0, 0), cv::Point2f(48, 42),
+                                    cv::Point2f(128, 140), cv::Point2f(210, 232),
+                                    cv::Point2f(255, 255)});
+        work = adjustVibrance(work, 0.38);
+        work = unsharpMask(work, 0.25, 3, 0.7);
+    } else if (key == "landscape") {
+        work = claheEqualize(work, 2.2, 8);
+        work = adjustVibrance(work, 0.32);
+        work = adjustTemperatureTint(work, -0.06, -0.04);
+        work = unsharpMask(work, 0.35, 3, 0.8);
+    } else if (key == "portrait") {
+        work = adjustTemperatureTint(work, 0.08, 0.04);
+        work = applyToneCurve(work, {cv::Point2f(0, 6), cv::Point2f(72, 78),
+                                    cv::Point2f(160, 166), cv::Point2f(255, 250)});
+        work = adjustSaturation(work, 1.04);
+    } else if (key == "food") {
+        work = adjustTemperatureTint(work, 0.12, 0.02);
+        work = adjustVibrance(work, 0.42);
+        work = applyToneCurve(work, {cv::Point2f(0, 0), cv::Point2f(90, 88),
+                                    cv::Point2f(170, 188), cv::Point2f(255, 255)});
+    } else if (key == "night") {
+        work = denoiseNlMeans(work, 6.0F, 7, 21);
+        work = claheEqualize(work, 1.8, 8);
+        work = applyToneCurve(work, {cv::Point2f(0, 2), cv::Point2f(56, 66),
+                                    cv::Point2f(160, 176), cv::Point2f(255, 255)});
+    } else if (key == "document") {
+        cv::Mat gray = toGray(work);
+        cv::Mat enhanced;
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.5, cv::Size(8, 8));
+        clahe->apply(gray, enhanced);
+        cv::Mat binary;
+        cv::adaptiveThreshold(enhanced, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+                              cv::THRESH_BINARY, 31, 7);
+        cv::cvtColor(binary, work, cv::COLOR_GRAY2BGR);
+    } else if (key == "cinematic") {
+        work = adjustTemperatureTint(work, -0.12, 0.06);
+        work = adjustSaturation(work, 0.82);
+        work = applyToneCurve(work, {cv::Point2f(0, 10), cv::Point2f(72, 62),
+                                    cv::Point2f(180, 196), cv::Point2f(255, 244)});
+    } else if (key == "warm") {
+        work = adjustTemperatureTint(work, 0.22, 0.03);
+        work = adjustVibrance(work, 0.12);
+    } else if (key == "cool") {
+        work = adjustTemperatureTint(work, -0.22, -0.02);
+        work = adjustVibrance(work, 0.08);
+    } else if (key == "mono" || key == "black_white" || key == "bw") {
+        cv::cvtColor(toGray(work), work, cv::COLOR_GRAY2BGR);
+        work = applyToneCurve(work, {cv::Point2f(0, 0), cv::Point2f(70, 58),
+                                    cv::Point2f(180, 202), cv::Point2f(255, 255)});
+    } else if (key == "fade") {
+        work = adjustSaturation(work, 0.82);
+        work = applyToneCurve(work, {cv::Point2f(0, 22), cv::Point2f(92, 96),
+                                    cv::Point2f(190, 198), cv::Point2f(255, 244)});
+    } else if (key == "vintage") {
+        work = adjustTemperatureTint(work, 0.18, 0.08);
+        work = adjustSaturation(work, 0.86);
+        work = applyToneCurve(work, {cv::Point2f(0, 18), cv::Point2f(80, 74),
+                                    cv::Point2f(170, 185), cv::Point2f(255, 240)});
+        work = applyToneCurve(work, {cv::Point2f(0, 10), cv::Point2f(128, 126),
+                                    cv::Point2f(255, 242)}, "b");
+    } else {
+        throw std::invalid_argument("Unknown preset filter: " + preset);
+    }
+
+    return blendImages(base, work, intensity);
+}
+
+cv::Mat autoEnhance(const cv::Mat &src, double strength) {
+    requireImage(src);
+    if (strength < 0.0 || strength > 1.0) {
+        throw std::invalid_argument("auto enhance strength must be in [0, 1]");
+    }
+
+    const cv::Mat base = ensureBgr(src);
+    cv::Mat work = grayWorldWhiteBalance(base);
+    work = autoLevelsLab(work);
+    work = claheEqualize(work, 1.7, 8);
+
+    cv::Mat lab;
+    cv::cvtColor(work, lab, cv::COLOR_BGR2Lab);
+    std::vector<cv::Mat> labChannels;
+    cv::split(lab, labChannels);
+    cv::Scalar meanL, stdL;
+    cv::meanStdDev(labChannels[0], meanL, stdL);
+
+    const double contrastGain = clampDouble(1.0 + (48.0 - stdL[0]) / 420.0, 0.94, 1.14);
+    const double lightBias = clampDouble((128.0 - meanL[0]) / 18.0, -8.0, 8.0);
+    work = adjustBrightnessContrast(work, contrastGain, lightBias);
+
+    cv::Mat hsv;
+    cv::cvtColor(work, hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> hsvChannels;
+    cv::split(hsv, hsvChannels);
+    const double meanSaturation = cv::mean(hsvChannels[1])[0];
+    const double vibrance = clampDouble((110.0 - meanSaturation) / 260.0, 0.08, 0.28);
+    work = adjustVibrance(work, vibrance);
+    work = unsharpMask(work, 0.22, 3, 0.8);
+
+    return blendImages(base, work, strength);
 }
 
 cv::Mat thresholdBinary(const cv::Mat &src, double thresholdValue, double maxValue) {
@@ -760,6 +1376,112 @@ cv::Mat normalizeToByte(const cv::Mat &src) {
     cv::normalize(src, normalized, 0, 255, cv::NORM_MINMAX);
     normalized.convertTo(normalized, CV_8U);
     return normalized;
+}
+
+std::map<std::string, std::string> readImageMetadata(const std::string &path) {
+    const std::vector<unsigned char> data = readFileBytes(path);
+    std::map<std::string, std::string> metadata;
+    metadata["file_size_bytes"] = std::to_string(data.size());
+    if (data.empty()) {
+        return metadata;
+    }
+
+    if (hasBytes(data, 0, 8) && data[0] == 0x89 && data[1] == 'P' &&
+        data[2] == 'N' && data[3] == 'G') {
+        metadata["format"] = "PNG";
+        if (hasBytes(data, 16, 8)) {
+            const uint32_t width = (static_cast<uint32_t>(data[16]) << 24) |
+                                   (static_cast<uint32_t>(data[17]) << 16) |
+                                   (static_cast<uint32_t>(data[18]) << 8) |
+                                   static_cast<uint32_t>(data[19]);
+            const uint32_t height = (static_cast<uint32_t>(data[20]) << 24) |
+                                    (static_cast<uint32_t>(data[21]) << 16) |
+                                    (static_cast<uint32_t>(data[22]) << 8) |
+                                    static_cast<uint32_t>(data[23]);
+            metadata["pixel_width"] = std::to_string(width);
+            metadata["pixel_height"] = std::to_string(height);
+        }
+        return metadata;
+    }
+
+    if (!hasBytes(data, 0, 2) || data[0] != 0xFF || data[1] != 0xD8) {
+        metadata["format"] = "unknown";
+        return metadata;
+    }
+
+    metadata["format"] = "JPEG";
+    std::size_t pos = 2;
+    while (hasBytes(data, pos, 4)) {
+        while (pos < data.size() && data[pos] == 0xFF) {
+            ++pos;
+        }
+        if (pos >= data.size()) {
+            break;
+        }
+
+        const unsigned char marker = data[pos++];
+        if (marker == 0xD9 || marker == 0xDA) {
+            break;
+        }
+        if (!hasBytes(data, pos, 2)) {
+            break;
+        }
+        const uint16_t segmentLength = readBe16(data, pos);
+        if (segmentLength < 2 || !hasBytes(data, pos + 2, segmentLength - 2)) {
+            break;
+        }
+
+        const std::size_t segmentStart = pos + 2;
+        const std::size_t segmentEnd = segmentStart + segmentLength - 2;
+        const bool startOfFrame = (marker >= 0xC0 && marker <= 0xC3) ||
+                                  (marker >= 0xC5 && marker <= 0xC7) ||
+                                  (marker >= 0xC9 && marker <= 0xCB) ||
+                                  (marker >= 0xCD && marker <= 0xCF);
+        if (startOfFrame && hasBytes(data, segmentStart, 5)) {
+            metadata["pixel_height"] = std::to_string(readBe16(data, segmentStart + 1));
+            metadata["pixel_width"] = std::to_string(readBe16(data, segmentStart + 3));
+        }
+
+        if (marker == 0xE1 && hasBytes(data, segmentStart, 14) &&
+            data[segmentStart] == 'E' && data[segmentStart + 1] == 'x' &&
+            data[segmentStart + 2] == 'i' && data[segmentStart + 3] == 'f' &&
+            data[segmentStart + 4] == 0 && data[segmentStart + 5] == 0) {
+            const std::size_t tiff = segmentStart + 6;
+            if (hasBytes(data, tiff, 8)) {
+                const bool little = data[tiff] == 'I' && data[tiff + 1] == 'I';
+                const bool big = data[tiff] == 'M' && data[tiff + 1] == 'M';
+                if (little || big) {
+                    const ExifReader reader(data, tiff, little);
+                    const uint16_t magic = little
+                                                   ? static_cast<uint16_t>(data[tiff + 2] |
+                                                                           (data[tiff + 3] << 8))
+                                                   : static_cast<uint16_t>((data[tiff + 2] << 8) |
+                                                                           data[tiff + 3]);
+                    const uint32_t ifd0 = little
+                                                  ? static_cast<uint32_t>(data[tiff + 4]) |
+                                                            (static_cast<uint32_t>(data[tiff + 5]) << 8) |
+                                                            (static_cast<uint32_t>(data[tiff + 6]) << 16) |
+                                                            (static_cast<uint32_t>(data[tiff + 7]) << 24)
+                                                  : (static_cast<uint32_t>(data[tiff + 4]) << 24) |
+                                                            (static_cast<uint32_t>(data[tiff + 5]) << 16) |
+                                                            (static_cast<uint32_t>(data[tiff + 6]) << 8) |
+                                                            static_cast<uint32_t>(data[tiff + 7]);
+                    if (magic == 42) {
+                        reader.parseIfd(ifd0, false, metadata);
+                    }
+                }
+            }
+        }
+
+        pos = segmentEnd;
+    }
+
+    return metadata;
+}
+
+std::vector<std::string> availablePresetFilters() {
+    return {"vivid", "landscape", "portrait", "food", "night", "document",
+            "cinematic", "warm", "cool", "mono", "fade", "vintage"};
 }
 
 MorphType parseMorphType(const std::string &name) {

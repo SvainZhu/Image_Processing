@@ -8,7 +8,7 @@
 - `image_cli`：命令行图像处理工具，适合批处理、脚本调用和快速验证算法效果。
 - `Image_Processing`：原 Qt5 可视化演示程序，适合交互式查看处理效果。
 
-新增的 `image_ops` 覆盖常用图像处理操作：灰度化、尺寸变换、裁剪、旋转、翻转、直方图、均衡化、CLAHE、亮度/对比度、Gamma、白平衡、阈值分割、滤波、非局部均值去噪、形态学、边缘检测、轮廓、连通域、距离变换、分水岭、Hough 检测、模板匹配、ORB 特征、图像修复、金字塔、仿射变换、锐化、噪声、颜色空间转换和伪彩色映射。
+新增的 `image_ops` 覆盖常用图像处理操作：灰度化、尺寸变换、裁剪、旋转、翻转、直方图、均衡化、CLAHE、亮度/对比度、Gamma、白平衡、鲜明度、饱和度、色温/色调、色彩曲线、预设滤镜、自动修图、EXIF 元数据读取、阈值分割、滤波、非局部均值去噪、形态学、边缘检测、轮廓、连通域、距离变换、分水岭、Hough 检测、模板匹配、ORB 特征、图像修复、金字塔、仿射变换、锐化、噪声、颜色空间转换和伪彩色映射。
 
 ## 常用工具箱能力映射
 
@@ -24,6 +24,18 @@
 | 分割和对象分析 | `watershed`、`connected_components`、`contours` |
 | 特征和匹配 | `orb`、`template_match` |
 | 图像恢复和多尺度 | `inpaint`、`pyrdown`、`pyrup` |
+
+## 手机相册编辑能力映射
+
+参考 Apple Photos 和 Google Photos 等手机/相册编辑器的常见功能，本项目新增了面向照片后期的编辑层：
+
+| 相册常见功能 | 本项目实现 |
+| --- | --- |
+| 自动增强、建议编辑 | `auto_enhance`：白平衡、自动色阶、局部 CLAHE、轻量锐化和自适应鲜明度 |
+| 手动调整亮度、对比度、饱和度、鲜明度、色偏 | `brightness`、`saturation`、`vibrance`、`temperature` |
+| 色彩曲线/色阶 | `curve`，支持全通道或单独 `r/g/b` 通道 |
+| 滤镜/风格 | `filter`，内置人像、风景、美食、夜景、文档、电影感、冷暖色、黑白、褪色、复古等预设 |
+| 照片详情页的拍摄参数 | `metadata`，读取 JPEG EXIF 中的 ISO、焦距、光圈、快门、机型、镜头等标签 |
 
 ## 项目结构
 
@@ -77,6 +89,7 @@ cmake --build build
 
 ```bash
 image_cli <input> <output> <operation> [key=value ...]
+image_cli <input> metadata
 ```
 
 示例：
@@ -123,6 +136,20 @@ image_cli resources/img/lena.jpg out_noise.jpg gaussian_noise mean=0 stddev=15 s
 
 # 使用伪彩色
 image_cli resources/img/lena.jpg out_turbo.jpg colormap map=turbo
+
+# 手机相册式鲜明度和饱和度调整
+image_cli resources/img/lena.jpg out_vibrance.jpg vibrance amount=0.35
+image_cli resources/img/lena.jpg out_saturation.jpg saturation factor=1.2
+
+# 曲线调整，支持 all/r/g/b 通道
+image_cli resources/img/lena.jpg out_curve.jpg curve points=0:0,64:58,128:140,255:255 channel=all
+
+# 一键滤镜和自动修图
+image_cli resources/img/lena.jpg out_portrait.jpg filter preset=portrait intensity=0.85
+image_cli resources/img/lena.jpg out_auto.jpg auto_enhance strength=1
+
+# 读取照片元数据，不需要输出文件
+image_cli resources/img/lena.jpg metadata
 ```
 
 ### CLI 操作列表
@@ -140,6 +167,13 @@ image_cli resources/img/lena.jpg out_turbo.jpg colormap map=turbo
 | `brightness` / `contrast` | `alpha`, `beta` | `image_cli in.jpg out.jpg brightness alpha=1.2 beta=15` |
 | `gamma` | `gamma` | `image_cli in.jpg out.jpg gamma gamma=1.8` |
 | `white_balance` | 无 | `image_cli in.jpg out.jpg white_balance` |
+| `saturation` | `factor` | `image_cli in.jpg out.jpg saturation factor=1.2` |
+| `vibrance` | `amount`，范围 `[-1,1]` | `image_cli in.jpg out.jpg vibrance amount=0.35` |
+| `temperature` | `temperature`, `tint`，范围 `[-1,1]` | `image_cli in.jpg out.jpg temperature temperature=0.12 tint=0.02` |
+| `curve` | `points`, `channel` | `image_cli in.jpg out.jpg curve points=0:0,128:140,255:255` |
+| `filter` | `preset`, `intensity` | `image_cli in.jpg out.jpg filter preset=landscape intensity=0.9` |
+| `auto_enhance` | `strength` | `image_cli in.jpg out.jpg auto_enhance strength=1` |
+| `metadata` | 无 | `image_cli in.jpg metadata` |
 | `threshold` | `value`, `max` | `image_cli in.jpg out.jpg threshold value=128` |
 | `otsu` | 无 | `image_cli in.jpg out.jpg otsu` |
 | `adaptive` | `block`, `c`, `gaussian` | `image_cli in.jpg out.jpg adaptive block=15 c=3` |
@@ -179,6 +213,10 @@ image_cli resources/img/lena.jpg out_turbo.jpg colormap map=turbo
 `colorspace code` 支持：`bgr2rgb`、`rgb2bgr`、`bgr2gray`、`gray2bgr`、`bgr2hsv`、`hsv2bgr`、`bgr2lab`、`lab2bgr`、`bgr2ycrcb`、`ycrcb2bgr`。
 
 `template_match method` 支持：`sqdiff`、`sqdiff_normed`、`ccorr`、`ccorr_normed`、`ccoeff`、`ccoeff_normed`。
+
+`filter preset` 支持：`vivid`、`landscape`、`portrait`、`food`、`night`、`document`、`cinematic`、`warm`、`cool`、`mono`、`fade`、`vintage`。
+
+`metadata` 会输出 `key=value`。JPEG EXIF 常见输出包括：`iso`、`focal_length_mm`、`focal_length_35mm`、`aperture`、`exposure_time_s`、`make`、`model`、`lens_model`、`datetime_original`、`pixel_width`、`pixel_height`。
 
 ## C++ 函数库用法
 
@@ -232,6 +270,12 @@ target_link_libraries(my_app PRIVATE image_processing_ops)
 | `imgproc::adjustBrightnessContrast(src, alpha, beta)` | 线性亮度/对比度调整：`dst = alpha * src + beta` | `auto bright = imgproc::adjustBrightnessContrast(src, 1.2, 10);` |
 | `imgproc::gammaCorrection(src, gamma)` | Gamma 校正 | `auto corrected = imgproc::gammaCorrection(src, 1.8);` |
 | `imgproc::grayWorldWhiteBalance(src)` | 灰度世界白平衡，纠正简单色偏 | `auto wb = imgproc::grayWorldWhiteBalance(src);` |
+| `imgproc::adjustSaturation(src, factor)` | 调整整体色彩强度 | `auto sat = imgproc::adjustSaturation(src, 1.2);` |
+| `imgproc::adjustVibrance(src, amount)` | 鲜明度调整，优先提升低饱和区域并保护高饱和区域 | `auto vib = imgproc::adjustVibrance(src, 0.35);` |
+| `imgproc::adjustTemperatureTint(src, temperature, tint)` | 基于 Lab 色彩空间调整冷暖和偏色 | `auto warm = imgproc::adjustTemperatureTint(src, 0.15, 0.02);` |
+| `imgproc::applyToneCurve(src, points, channel)` | 按曲线 LUT 调整全通道或单独 R/G/B 通道 | `auto curved = imgproc::applyToneCurve(src, {{0,0},{128,140},{255,255}});` |
+| `imgproc::applyPresetFilter(src, preset, intensity)` | 套用成熟场景滤镜预设 | `auto look = imgproc::applyPresetFilter(src, "portrait", 0.85);` |
+| `imgproc::autoEnhance(src, strength)` | 根据亮度、局部直方图和饱和度统计自动修图 | `auto autoFixed = imgproc::autoEnhance(src);` |
 | `imgproc::thresholdBinary(src, threshold, max)` | 全局二值阈值分割 | `auto bin = imgproc::thresholdBinary(src, 128);` |
 | `imgproc::thresholdOtsu(src)` | Otsu 自动阈值分割 | `auto bin = imgproc::thresholdOtsu(src);` |
 | `imgproc::adaptiveThresholdImage(src, block, c, gaussian)` | 自适应阈值分割 | `auto bin = imgproc::adaptiveThresholdImage(src, 15, 3);` |
@@ -277,6 +321,8 @@ target_link_libraries(my_app PRIVATE image_processing_ops)
 | `imgproc::applyColorMapImage(src, colorMap)` | 伪彩色映射 | `auto color = imgproc::applyColorMapImage(src, cv::COLORMAP_TURBO);` |
 | `imgproc::parseColorMap(name)` | 将字符串转换为 OpenCV colormap | `auto map = imgproc::parseColorMap("viridis");` |
 | `imgproc::parseTemplateMatchMethod(name)` | 将字符串转换为 OpenCV 模板匹配方法 | `auto m = imgproc::parseTemplateMatchMethod("ccoeff_normed");` |
+| `imgproc::readImageMetadata(path)` | 读取 JPEG EXIF/PNG 基础元数据 | `auto meta = imgproc::readImageMetadata("photo.jpg");` |
+| `imgproc::availablePresetFilters()` | 返回内置滤镜名称列表 | `auto filters = imgproc::availablePresetFilters();` |
 
 ## 高性能与准确性建议
 
@@ -285,6 +331,8 @@ target_link_libraries(my_app PRIVATE image_processing_ops)
 - 边缘检测优先使用 `auto_canny` 快速估计阈值，再根据结果微调 `low/high`。
 - 小目标分割可先 `clahe -> gaussian_blur -> otsu/adaptive -> morphology -> components/contours`。
 - 模板匹配适合刚性目标或 UI/文档定位；旋转、尺度变化明显时建议使用 `orb` 特征。
+- 手机照片修图优先尝试 `auto_enhance`，再叠加小强度 `filter`；避免多次大幅度曲线调整导致高光或阴影细节被压扁。
+- 读取拍摄参数时使用 `metadata`，它只扫描文件头和 EXIF 结构，不需要解码整张图片，适合相册列表或详情页快速展示。
 - 所有新增高级函数尽量调用 OpenCV 优化算子，避免手写逐像素慢循环；输入参数会做边界检查，减少无效结果和崩溃。
 
 ## 原有 `base_proc` 函数

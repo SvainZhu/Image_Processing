@@ -6,8 +6,10 @@
 #include <cctype>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -18,6 +20,7 @@ void printUsage() {
             << "Image Processing CLI\n"
             << "Usage:\n"
             << "  image_cli <input> <output> <operation> [key=value ...]\n\n"
+            << "  image_cli <input> metadata\n\n"
             << "Operations:\n"
             << "  gray | grayscale\n"
             << "  resize width=<px> height=<px> keep_aspect=true|false\n"
@@ -30,6 +33,13 @@ void printUsage() {
             << "  brightness [alpha=1.0 beta=0]\n"
             << "  gamma gamma=<value>\n"
             << "  white_balance\n"
+            << "  saturation [factor=1.0]\n"
+            << "  vibrance [amount=0.25]\n"
+            << "  temperature [temperature=0 tint=0]\n"
+            << "  curve points=0:0,128:140,255:255 [channel=all|r|g|b]\n"
+            << "  filter preset=vivid|portrait|landscape|food|night|document|cinematic|warm|cool|mono|fade|vintage [intensity=1]\n"
+            << "  auto_enhance [strength=1]\n"
+            << "  metadata\n"
             << "  threshold value=<gray> [max=255]\n"
             << "  otsu\n"
             << "  adaptive [block=11 c=2 gaussian=true]\n"
@@ -134,6 +144,31 @@ cv::Mat loadOptionImage(const Options &options, const std::string &key) {
     return image;
 }
 
+std::vector<cv::Point2f> parseCurvePoints(const std::string &text) {
+    std::vector<cv::Point2f> points;
+    std::stringstream stream(text);
+    std::string item;
+    while (std::getline(stream, item, ',')) {
+        const std::size_t pos = item.find(':');
+        if (pos == std::string::npos) {
+            throw std::invalid_argument("Curve point must use x:y format: " + item);
+        }
+        const float x = std::stof(item.substr(0, pos));
+        const float y = std::stof(item.substr(pos + 1));
+        points.push_back(cv::Point2f(x, y));
+    }
+    if (points.size() < 2) {
+        throw std::invalid_argument("Curve points require at least two x:y pairs");
+    }
+    return points;
+}
+
+void printMetadata(const std::map<std::string, std::string> &metadata) {
+    for (const auto &item : metadata) {
+        std::cout << item.first << "=" << item.second << '\n';
+    }
+}
+
 std::string normalizeOp(std::string op) {
     for (char &ch : op) {
         if (ch == '-') {
@@ -190,6 +225,31 @@ cv::Mat runOperation(const cv::Mat &image, const std::string &operation,
     }
     if (op == "white_balance" || op == "gray_world") {
         return imgproc::grayWorldWhiteBalance(image);
+    }
+    if (op == "saturation") {
+        return imgproc::adjustSaturation(image, getDouble(options, "factor", 1.0));
+    }
+    if (op == "vibrance" || op == "vividness") {
+        return imgproc::adjustVibrance(image, getDouble(options, "amount", 0.25));
+    }
+    if (op == "temperature" || op == "color_balance") {
+        return imgproc::adjustTemperatureTint(image,
+                                              getDouble(options, "temperature", 0.0),
+                                              getDouble(options, "tint", 0.0));
+    }
+    if (op == "curve" || op == "tone_curve") {
+        return imgproc::applyToneCurve(
+                image,
+                parseCurvePoints(requireString(options, "points")),
+                getString(options, "channel", "all"));
+    }
+    if (op == "filter" || op == "preset") {
+        return imgproc::applyPresetFilter(image,
+                                          getString(options, "preset", "vivid"),
+                                          getDouble(options, "intensity", 1.0));
+    }
+    if (op == "auto_enhance" || op == "auto_adjust" || op == "auto") {
+        return imgproc::autoEnhance(image, getDouble(options, "strength", 1.0));
     }
     if (op == "threshold") {
         return imgproc::thresholdBinary(image, getDouble(options, "value", 128.0),
@@ -344,6 +404,18 @@ int main(int argc, char **argv) {
     if (argc < 2 || std::string(argv[1]) == "--help" || std::string(argv[1]) == "help") {
         printUsage();
         return argc < 2 ? 1 : 0;
+    }
+    if (argc >= 3) {
+        const std::string mode = normalizeOp(argv[2]);
+        if (mode == "metadata" || mode == "exif") {
+            try {
+                printMetadata(imgproc::readImageMetadata(argv[1]));
+                return 0;
+            } catch (const std::exception &error) {
+                std::cerr << "Error: " << error.what() << std::endl;
+                return 2;
+            }
+        }
     }
     if (argc < 4) {
         printUsage();
